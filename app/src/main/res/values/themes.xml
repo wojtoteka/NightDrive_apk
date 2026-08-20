@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Base app theme: dark, edge-to-edge, no action bar. Compose owns the UI. -->
+    <style name="Theme.NightDrive" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/night_background</item>
+        <item name="android:statusBarColor">@color/transparent</item>
+        <item name="android:navigationBarColor">@color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <!-- Splash screen shown on cold start (androidx core-splashscreen). -->
+    <style name="Theme.NightDrive.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/night_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.NightDrive</item>
+    </style>
+</resources>

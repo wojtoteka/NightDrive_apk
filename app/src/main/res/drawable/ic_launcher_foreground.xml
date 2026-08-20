@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Synthwave sun clipped to a circle, kept inside the adaptive safe zone -->
+    <group>
+        <clip-path android:pathData="M54,42 m-17,0 a17,17 0 1,0 34,0 a17,17 0 1,0 -34,0" />
+        <path android:pathData="M35,24 h38 v38 h-38 z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="54" android:startY="25"
+                    android:endX="54" android:endY="59"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#FFFFE7A6" />
+                    <item android:offset="0.36" android:color="#FFFF8A3D" />
+                    <item android:offset="0.72" android:color="#FFFF3DAE" />
+                    <item android:offset="1.0" android:color="#FF9A2BFF" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:fillColor="#0A0B1E" android:pathData="M35,44 h38 v1.7 h-38 z" />
+        <path android:fillColor="#0A0B1E" android:pathData="M35,48 h38 v2.0 h-38 z" />
+        <path android:fillColor="#0A0B1E" android:pathData="M35,52.5 h38 v2.4 h-38 z" />
+        <path android:fillColor="#0A0B1E" android:pathData="M35,57.5 h38 v2.8 h-38 z" />
+    </group>
+
+    <!-- Perspective road -->
+    <path android:strokeWidth="2.6" android:strokeLineCap="round"
+        android:strokeColor="#FF22E9FF" android:pathData="M45,60 L33,82" />
+    <path android:strokeWidth="2.6" android:strokeLineCap="round"
+        android:strokeColor="#FF22E9FF" android:pathData="M63,60 L75,82" />
+    <path android:fillColor="#FFB9F8FF" android:pathData="M53.2,63 h1.6 v4 h-1.6 z" />
+    <path android:fillColor="#FFDFFCFF" android:pathData="M52.6,70 h2.8 v5 h-2.8 z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M51.8,79 h4.4 v5.5 h-4.4 z" />
+</vector>

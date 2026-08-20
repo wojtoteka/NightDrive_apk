@@ -1,0 +1,15 @@
+## Wzor local.properties. Skopiuj jako local.properties i uzupelnij.
+## Prawdziwy plik NIE trafia do repozytorium.
+
+# Sciezka do Android SDK na tej maszynie.
+sdk.dir=C\:\Users\TwojaNazwa\AppData\Local\Android\Sdk
+
+# --- Sekrety rankingu online ---
+# Musza byc identyczne jak w .env serwera rankingowego. Bez nich gra dziala
+# normalnie, ale serwer odrzuci wysylane wyniki.
+NIGHTDRIVE_API_KEY=
+NIGHTDRIVE_HMAC_SECRET=
+
+# Opcjonalnie: lokalny serwer rankingu dla buildow debug
+# (10.0.2.2 to localhost hosta widziany z emulatora)
+# NIGHTDRIVE_DEBUG_API=http://10.0.2.2:3800
