@@ -77,7 +77,7 @@ class GameEngine(
     private var newHighAnnounced = false
     private var invulnerableUntil = 0L   // post-revive grace window (virtual clock)
     // Coin-earning starter boosts (magnet/double/coin rush) arm at run start but fire on the FIRST
-    // collected coin — the opening seconds have no coins, so firing immediately would waste them.
+    // collected coin - the opening seconds have no coins, so firing immediately would waste them.
     // The slow-motion starter is defensive, not coin-driven: it activates right at run start.
     private var starterBoostsPending = false
     // Base duration of whatever activated each timed effect (starter boosts run much longer than
@@ -147,7 +147,7 @@ class GameEngine(
     }
 
     /** Applies one of each purchased coin-earning starter boost, if any are in stock. Called from
-     *  [awardCoin] on the first coin of the run, not at run start — see [starterBoostsPending]. */
+     *  [awardCoin] on the first coin of the run, not at run start - see [starterBoostsPending]. */
     private fun consumeStarterBoosts() {
         if (profile.pendingMagnetStarts > 0) { profile.pendingMagnetStarts--; profile.lifetimeBoostsUsed++; applyTimed(PowerUpType.MAGNET, starterDuration(PowerUpType.MAGNET)) }
         if (profile.pendingDoubleStarts > 0) { profile.pendingDoubleStarts--; profile.lifetimeBoostsUsed++; applyTimed(PowerUpType.DOUBLE, starterDuration(PowerUpType.DOUBLE)) }
@@ -436,7 +436,7 @@ class GameEngine(
     private fun boostedDuration(type: PowerUpType): Long =
         type.durationMs * (100 + profile.boostDurationPercent(type)) / 100
 
-    /** Effective duration of a starter boost — the long base, same tier upgrades applied. */
+    /** Effective duration of a starter boost - the long base, same tier upgrades applied. */
     private fun starterDuration(type: PowerUpType): Long =
         C.STARTER_BOOST_MS * (100 + profile.boostDurationPercent(type)) / 100
 

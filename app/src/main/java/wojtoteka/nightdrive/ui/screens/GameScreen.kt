@@ -167,7 +167,7 @@ private fun HudLeft(vm: GameViewModel, modifier: Modifier) {
             if (hud.comboMultiplier > 1f) ComboBadge(hud.comboMultiplier)
         }
         // Live daily progress for every goal type that advances mid-run (coins, combo, power-ups);
-        // the survival type only updates at crash, so it never renders here — same as before.
+        // the survival type only updates at crash, so it never renders here - same as before.
         if (!hud.dailyCompleted && hud.dailyProgress > 0) {
             Spacer(Modifier.height(6.dp))
             Text("${s["daily_challenge"]}: ${hud.dailyProgress}/${hud.dailyGoal}", style = NDType.LabelSmall, color = NDColors.Cyan)
@@ -337,7 +337,7 @@ private fun GameOverOverlay(vm: GameViewModel, ads: AdsController) {
 @Composable
 private fun AdOfferSection(vm: GameViewModel, ads: AdsController) {
     val s = LocalStrings.current
-    // A submitted (or in-flight) score already consumed this run's anti-cheat session — the
+    // A submitted (or in-flight) score already consumed this run's anti-cheat session - the
     // continued run couldn't be submitted again, so don't offer a continue that would mislead.
     val reviveVisible = !vm.adReviveUsed && ads.rewardedReady &&
         vm.submitState !is SubmitState.Done && vm.submitState !is SubmitState.Submitting

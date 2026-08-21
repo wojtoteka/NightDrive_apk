@@ -110,7 +110,7 @@ object BoostDurationUpgrade {
 }
 
 /** A consumable purchase that runs one of the timed power-ups for a long 60s stretch of the next
- *  run (see GameConfig.STARTER_BOOST_MS) — slow motion from the very start of the run, the
+ *  run (see GameConfig.STARTER_BOOST_MS) - slow motion from the very start of the run, the
  *  coin-earning three from the first collected coin. Bought in stock (each purchase adds one). */
 data class Boost(val id: String, val nameKey: String, val descKey: String, val price: Int, val type: PowerUpType)
 

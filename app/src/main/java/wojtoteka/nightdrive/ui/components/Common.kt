@@ -104,7 +104,7 @@ fun NeonButton(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    // Focus ring for D-pad / keyboard menu navigation only — never on a plain touch tap.
+    // Focus ring for D-pad / keyboard menu navigation only - never on a plain touch tap.
     val focused by interaction.collectIsFocusedAsState()
     val navFocused = isNavFocus(focused)
     val scale by animateFloatAsState(if (pressed) 0.96f else 1f, label = "press")

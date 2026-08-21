@@ -164,7 +164,7 @@ class MainActivity : ComponentActivity() {
     }
 
     // Edge-triggered with hysteresis: one focus move per stick flick, re-armed when it returns
-    // toward centre — mirrors how consoles navigate menus with an analog stick.
+    // toward centre - mirrors how consoles navigate menus with an analog stick.
     private var stickFocusX = 0
     private var stickFocusY = 0
 

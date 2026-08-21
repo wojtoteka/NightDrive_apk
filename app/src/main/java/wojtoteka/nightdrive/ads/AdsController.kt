@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class AdsController(private val activity: Activity) {
 
-    /** True when a rewarded ad is loaded — gates the "double coins" button on game over. */
+    /** True when a rewarded ad is loaded - gates the "double coins" button on game over. */
     var rewardedReady by mutableStateOf(false); private set
 
     /** True when GDPR rules require offering a "change your consent" entry point in settings. */
@@ -58,7 +58,7 @@ class AdsController(private val activity: Activity) {
                 }
             },
             {
-                // Offline / misconfigured message — fall back to any consent cached earlier.
+                // Offline / misconfigured message - fall back to any consent cached earlier.
                 if (consent.canRequestAds()) initSdk()
             },
         )
@@ -75,7 +75,7 @@ class AdsController(private val activity: Activity) {
     /**
      * Called when the player leaves the game-over screen (play again / menu / back) or quits to
      * the menu from pause. Shown every time, capped only by [MIN_INTERVAL_MS] so rapid
-     * back-to-back exits don't stack ads on top of each other. [onDone] always runs — immediately
+     * back-to-back exits don't stack ads on top of each other. [onDone] always runs - immediately
      * if no ad is shown, otherwise when the ad is dismissed.
      */
     fun maybeShowInterstitial(onDone: () -> Unit) {
@@ -152,12 +152,12 @@ class AdsController(private val activity: Activity) {
 
     private companion object {
         // Debug builds show an interstitial on every call, no cooldown, for easy testing.
-        // Release keeps a 30s floor between interstitials — showing one on literally every
+        // Release keeps a 30s floor between interstitials - showing one on literally every
         // exit with no minimum gap risks tripping AdMob's policy on disruptive ad frequency.
         val MIN_INTERVAL_MS = if (BuildConfig.DEBUG) 0L else 30_000L
         const val RETRY_MS = 45_000L
 
-        // Google's public test units — always fill, allowed to click. Used by debug builds.
+        // Google's public test units - always fill, allowed to click. Used by debug builds.
         const val TEST_INTERSTITIAL = "ca-app-pub-3940256099942544/1033173712"
         const val TEST_REWARDED = "ca-app-pub-3940256099942544/5224354917"
 

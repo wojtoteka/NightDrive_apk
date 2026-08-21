@@ -138,7 +138,7 @@ private fun DailyCard(vm: GameViewModel) {
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                if (p.dailyCompleted) "${title} — ${s["daily_done"]}" else "$title  ${p.dailyProgress}/${p.dailyGoal}$unitSuffix",
+                if (p.dailyCompleted) "${title} - ${s["daily_done"]}" else "$title  ${p.dailyProgress}/${p.dailyGoal}$unitSuffix",
                 style = NDType.Label,
                 color = if (p.dailyCompleted) NDColors.Green else NDColors.TextPrimary,
             )
@@ -149,7 +149,7 @@ private fun DailyCard(vm: GameViewModel) {
 }
 
 /**
- * "45s" below a minute, then "2:16". The colon form is deliberate — with the pixel display font
+ * "45s" below a minute, then "2:16". The colon form is deliberate - with the pixel display font
  * an "m" suffix reads like an "h", which made "2m 16s" look like two hours.
  */
 fun formatTime(seconds: Int): String {

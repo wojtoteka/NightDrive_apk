@@ -76,7 +76,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private var toastJob: Job? = null
     private var powerUpToastJob: Job? = null
 
-    // Live input intents — slide-to-steer surface
+    // Live input intents - slide-to-steer surface
     private var inLeft = false
     private var inRight = false
     private var inUp = false
@@ -323,7 +323,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * After a run, work out whether the score would land in the Top 10 (prompts the nickname UI).
-     * Qualification depends only on the leaderboard itself — the play session is resolved (and
+     * Qualification depends only on the leaderboard itself - the play session is resolved (and
      * retried) at submit time, so a slow session handshake never hides the name field.
      */
     private fun evaluateQualification(finalScore: Int) {
@@ -336,7 +336,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 cachedTop = top
                 scoreQualifies = top.size < 10 || finalScore > top.minOf { it.score }
             } catch (_: Exception) {
-                // Can't reach the ranking — tell the player why there's no entry field.
+                // Can't reach the ranking - tell the player why there's no entry field.
                 submitState = SubmitState.Offline
             }
         }
@@ -462,7 +462,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Rewarded ad -> one shield charge. No cooldown, no daily cap: watch the ad, get a charge,
-     * repeat — the only ceiling is [PlayerProfile.shieldMax], the same one every other shield source
+     * repeat - the only ceiling is [PlayerProfile.shieldMax], the same one every other shield source
      * respects, plus the natural gate of a new ad having to load before it can be shown again.
      */
     fun grantAdShield() {

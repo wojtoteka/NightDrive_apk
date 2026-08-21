@@ -217,7 +217,7 @@ fun ShopScreen(vm: GameViewModel, ads: AdsController) {
 
 /**
  * Floating "more below" pill: gently bobs to catch the eye, fades away at the end of the list,
- * and taps through to the next shop section — so it's obvious the garage scrolls vertically.
+ * and taps through to the next shop section - so it's obvious the garage scrolls vertically.
  */
 @Composable
 private fun ScrollHint(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -458,7 +458,7 @@ private fun BoostCard(boost: Boost, stock: Int, affordable: Boolean, onTap: () -
             ) { PowerUpGlyph(boost.type, size = 40) }
             Spacer(Modifier.height(12.dp))
             // Fixed line counts + an always-reserved stock slot keep all four cards the same
-            // height, whatever the description length or stock state — the row reads as one shelf.
+            // height, whatever the description length or stock state - the row reads as one shelf.
             Text(
                 s[boost.nameKey], style = NDType.Label, color = NDColors.TextPrimary,
                 textAlign = TextAlign.Center, minLines = 1, maxLines = 2,

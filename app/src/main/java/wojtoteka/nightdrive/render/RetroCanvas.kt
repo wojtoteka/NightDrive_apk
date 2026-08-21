@@ -121,7 +121,7 @@ class RetroCanvas(
         fillVerticalGradientPart(x, y, w, h, y, h, topColor, bottomColor)
 
     /**
-     * Draws only the (x,y,w,h) slice of a vertical gradient whose full span is (gradY, gradH) —
+     * Draws only the (x,y,w,h) slice of a vertical gradient whose full span is (gradY, gradH) -
      * lets a caller skip regions an opaque later layer covers anyway, with pixel-identical output
      * (the gradient's colour ramp is anchored to the full span, not the drawn slice).
      */
@@ -135,7 +135,7 @@ class RetroCanvas(
 
     fun drawText(text: String, x: Float, y: Float, worldSize: Float, color: Long, font: FontFamily = bodyFont) {
         // Quantize the size to 0.5sp steps (~1px, invisible in motion): the depth scale varies
-        // continuously, and un-quantized sizes would defeat the TextMeasurer layout cache — full
+        // continuously, and un-quantized sizes would defeat the TextMeasurer layout cache - full
         // text layout per coin per frame is the single most expensive draw call in the game.
         val rawSp = with(ds) { (worldSize * unit).toSp() }
         val fontSizeSp = ((rawSp.value * 2f).roundToInt() / 2f).sp

@@ -27,7 +27,7 @@ class WorldRenderer(private val coinFont: FontFamily, private val symbolFont: Fo
         drawBackground(rc, engine, animMs, theme)
         if (engine.phase != GamePhase.MENU) {
             // Painter's algorithm: farthest objects (highest y) first, so anything nearer occludes
-            // what's behind it — otherwise a coin near the horizon plasters over a car in the near
+            // what's behind it - otherwise a coin near the horizon plasters over a car in the near
             // field and looks like it's stuck inside the car. The player is the nearest object to
             // the camera, so it's always drawn last and occludes whatever it's driving over.
             depthOrder.clear()
@@ -80,7 +80,7 @@ class WorldRenderer(private val coinFont: FontFamily, private val symbolFont: Fo
         // Night sky. The opaque road gradient painted below covers y in [-91, 21], so the sky is
         // only filled where it can actually be seen: above the road and in the strip beneath it
         // (both with a few units of overlap for safety). The gradient ramp still spans the full
-        // 210-unit sky, so every visible pixel is identical — this just skips filling roughly
+        // 210-unit sky, so every visible pixel is identical - this just skips filling roughly
         // half the screen twice every frame.
         rc.fillVerticalGradientPart(0f, 59.5f, w, 91f, 0f, 210f, theme.skyTop, theme.skyBottom)
         rc.fillVerticalGradientPart(0f, -96f, w, 18f, 0f, 210f, theme.skyTop, theme.skyBottom)
@@ -236,7 +236,7 @@ class WorldRenderer(private val coinFont: FontFamily, private val symbolFont: Fo
     private fun drawCoin(rc: RetroCanvas, c: Coin, animMs: Float) {
         rc.reset()
         // Depth-scaled with the same formula as the pickup hitbox in GameEngine (10 - y/9), so a
-        // coin near the horizon is small next to distant cars and grows as it approaches — the
+        // coin near the horizon is small next to distant cars and grows as it approaches - the
         // visual matches where the game actually considers the coin to be.
         val base = 10f - c.y / 9f
         val size = if (c.popping) base * (1f + (1f - c.pop) * 1.2f) else base

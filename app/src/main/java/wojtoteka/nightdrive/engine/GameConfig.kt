@@ -56,7 +56,7 @@ object GameConfig {
     const val SHIELD_MAX = 5
     const val SHIELD_MAX_UPGRADED = 8  // with the permanent "shield capacity" shop upgrade
 
-    // Starter boosts (shop consumables) run far longer than their road-pickup counterparts —
+    // Starter boosts (shop consumables) run far longer than their road-pickup counterparts -
     // at pickup durations (5-12s) they could never repay their coin price.
     const val STARTER_BOOST_MS = 60_000L
 

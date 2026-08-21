@@ -10,7 +10,7 @@ import wojtoteka.nightdrive.R
 
 /**
  * Typography pairs the game's original retro display faces (used for the wordmark, big numbers and
- * headings — they carry the synthwave identity) with the system sans for dense body copy, keeping
+ * headings - they carry the synthwave identity) with the system sans for dense body copy, keeping
  * long text crisp and readable.
  */
 object NDFonts {

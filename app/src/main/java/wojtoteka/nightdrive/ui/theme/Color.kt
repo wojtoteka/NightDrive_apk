@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Night Drive neo-synthwave palette. Deep midnight bases with two neon accents (cyan + magenta),
- * a warm coin gold and a sunset gradient. Restrained on purpose — glow is used sparingly so the UI
+ * a warm coin gold and a sunset gradient. Restrained on purpose - glow is used sparingly so the UI
  * reads as a crafted product rather than an "everything glows" AI look.
  */
 object NDColors {

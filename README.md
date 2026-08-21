@@ -1,7 +1,7 @@
 # Night Drive
 
 Retro endless runner na Androida: nocna szosa, uniki między autami, monety, power-upy i ranking
-online. Cała grafika rysowana jest kodem na Compose Canvas — w projekcie nie ma ani jednego
+online. Cała grafika rysowana jest kodem na Compose Canvas - w projekcie nie ma ani jednego
 sprite'a samochodu.
 
 Kotlin · Jetpack Compose · silnik gry napisany od zera.
@@ -13,7 +13,7 @@ Kotlin · Jetpack Compose · silnik gry napisany od zera.
 **Własny silnik.** Symulacja chodzi ze stałym krokiem 60 Hz, niezależnie od odświeżania ekranu,
 więc gra zachowuje się tak samo na 60 i 120 Hz. Świat ma stałą wirtualną wysokość 200 jednostek
 (środek ekranu w zerze, oś Y do góry), a szerokość wynika z proporcji urządzenia. Cała tabela
-balansu siedzi w jednym pliku [`GameConfig.kt`](app/src/main/java/wojtoteka/nightdrive/engine/GameConfig.kt) —
+balansu siedzi w jednym pliku [`GameConfig.kt`](app/src/main/java/wojtoteka/nightdrive/engine/GameConfig.kt) -
 wartości przeniesione 1:1 z pierwotnej wersji w microScript, żeby czucie gry zostało to samo,
 gdy zmieniła się architektura wokół.
 
@@ -24,11 +24,11 @@ co nic.
 **Deterministyczna losowość.** Osobny `Rng`, żeby przebieg dało się odtworzyć i przetestować.
 
 **Sklep i progresja.** Skiny aut kupowane za monety, power-upy (magnes, slow-mo, podwojenie,
-deszcz monet) z trójstopniowymi ulepszeniami czasu trwania — osobno albo pakietem.
+deszcz monet) z trójstopniowymi ulepszeniami czasu trwania - osobno albo pakietem.
 Do tego 21 osiągnięć z nagrodami w monetach.
 
 **Ranking online.** Wyniki idą na własne API i są podpisywane HMAC-SHA256, więc serwer odrzuca
-spreparowane zgłoszenia. Klucz i sekret nie leżą w kodzie — build wciąga je z `local.properties`.
+spreparowane zgłoszenia. Klucz i sekret nie leżą w kodzie - build wciąga je z `local.properties`.
 Bez internetu gra działa w całości offline.
 
 **Reklamy.** AdMob: interstitial po przegranej i rewarded do podwojenia monet, z Google UMP
@@ -60,7 +60,7 @@ cp local.properties.example local.properties   # uzupełnij sdk.dir
 ./gradlew assembleDebug
 ```
 
-Ranking wymaga dwóch wartości w `local.properties` — `NIGHTDRIVE_API_KEY` i
+Ranking wymaga dwóch wartości w `local.properties` - `NIGHTDRIVE_API_KEY` i
 `NIGHTDRIVE_HMAC_SECRET`, identycznych jak w `.env` serwera rankingowego. Bez nich gra działa
 normalnie, tylko serwer nie przyjmie wyników. Build debug też uderza w produkcję, żeby
 sideloadowane testy działały na prawdziwym telefonie; lokalny serwer podpina się przez
@@ -70,7 +70,7 @@ sideloadowane testy działały na prawdziwym telefonie; lokalny serwer podpina s
 - release: R8 + shrink zasobów włączone
 
 > Build release podpisuje się kluczem debug, żeby sideload działał bez prawdziwego keystore.
-> Przed pierwszym wysłaniem na Google Play trzeba to zamienić na własny upload keystore —
+> Przed pierwszym wysłaniem na Google Play trzeba to zamienić na własny upload keystore -
 > Play odrzuca artefakty podpisane debugiem.
 
 ## Licencja

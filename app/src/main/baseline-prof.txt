@@ -1,5 +1,5 @@
 # Baseline profile: pre-compile (AOT) the whole game instead of letting ART JIT it during the
-# first seconds of every cold start — that JIT warm-up was the visible 10-20fps stutter right
+# first seconds of every cold start - that JIT warm-up was the visible 10-20fps stutter right
 # after launch. The app is small, so profiling everything is simpler and safer than curating a
 # generated profile; AndroidX/Compose ship their own profiles and AGP merges them in automatically.
 HSPLwojtoteka/nightdrive/**->**(**)**

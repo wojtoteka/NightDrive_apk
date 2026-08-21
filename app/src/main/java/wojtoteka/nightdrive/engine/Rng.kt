@@ -13,7 +13,7 @@ class Rng(seed: Long = Random.nextLong()) {
 
     fun next(): Float = random.nextFloat()
 
-    /** floor(rand * (floor(max) - ceil(min) + 1) + ceil(min)) — matches the source exactly. */
+    /** floor(rand * (floor(max) - ceil(min) + 1) + ceil(min)) - matches the source exactly. */
     fun intInRange(min: Float, max: Float): Int {
         val lo = ceil(min)
         val hi = floor(max)
