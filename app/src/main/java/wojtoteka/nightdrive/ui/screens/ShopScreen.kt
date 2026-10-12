@@ -1,14 +1,8 @@
 package wojtoteka.nightdrive.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -16,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,42 +18,40 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 import wojtoteka.nightdrive.domain.Boost
 import wojtoteka.nightdrive.domain.BoostDurationUpgrade
 import wojtoteka.nightdrive.domain.Boosts
@@ -72,259 +65,359 @@ import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
 import wojtoteka.nightdrive.ui.ProfileSnapshot
+import wojtoteka.nightdrive.ui.components.BuyButton
 import wojtoteka.nightdrive.ui.components.CoinIcon
-import wojtoteka.nightdrive.ui.components.CoinPill
-import wojtoteka.nightdrive.ui.components.NDCard
-import wojtoteka.nightdrive.ui.components.NeonButton
+import wojtoteka.nightdrive.ui.components.CoinReadout
+import wojtoteka.nightdrive.ui.components.Overline
+import wojtoteka.nightdrive.ui.components.Panel
 import wojtoteka.nightdrive.ui.components.PowerUpGlyph
+import wojtoteka.nightdrive.ui.components.Rule
 import wojtoteka.nightdrive.ui.components.ScreenHeader
-import wojtoteka.nightdrive.ui.components.ShieldIcon
+import wojtoteka.nightdrive.ui.components.ShieldGlyph
+import wojtoteka.nightdrive.ui.components.Tag
 import wojtoteka.nightdrive.ui.components.isNavFocus
+import wojtoteka.nightdrive.ui.theme.Corner
 import wojtoteka.nightdrive.ui.theme.LocalStrings
 import wojtoteka.nightdrive.ui.theme.NDColors
 import wojtoteka.nightdrive.ui.theme.NDType
-import wojtoteka.nightdrive.ui.theme.Radius
+import wojtoteka.nightdrive.ui.theme.Space
+
+private enum class ShopTab(val key: String) {
+    SKINS("tab_skins"), THEMES("tab_themes"), SHIELD("tab_shield"), BOOSTS("tab_boosts"), UPGRADES("tab_upgrades")
+}
 
 @Composable
 fun ShopScreen(vm: GameViewModel) {
     val s = LocalStrings.current
     val p = vm.profileState
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     BackHandler { vm.goTo(Destination.MENU) }
 
     Column(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(horizontal = 22.dp, vertical = 14.dp),
+            .padding(horizontal = Space.gutter, vertical = 14.dp),
     ) {
         ScreenHeader(
             title = s["shop"],
             onBack = { vm.goTo(Destination.MENU) },
-            accent = NDColors.Gold,
-            trailing = { CoinPill(p.totalCoins) },
+            backLabel = s["back"],
+            trailing = { Panel { CoinReadout(p.totalCoins, Modifier.padding(horizontal = 14.dp, vertical = 11.dp)) } },
         )
-        Spacer(Modifier.height(16.dp))
-        val listState = rememberLazyListState()
-        val scope = rememberCoroutineScope()
-        Box(Modifier.fillMaxWidth().weight(1f)) {
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            contentPadding = PaddingValues(bottom = 24.dp),
-        ) {
-            item {
-                Column {
-                    SectionLabel(s["shop_skins"])
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        Modifier.fillMaxWidth().height(210.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        items(Skins.all, key = { it.id }) { skin ->
-                            SkinCard(
-                                skin = skin,
-                                owned = p.ownedSkins.contains(skin.id),
-                                selected = p.selectedSkin == skin.id,
-                                affordable = p.totalCoins >= skin.price,
-                                onTap = { vm.onSkinTapped(skin.id) },
-                            )
-                        }
+        Spacer(Modifier.height(14.dp))
+        TabBar(ShopTab.entries.map { s[it.key] }, tab) { tab = it }
+        Spacer(Modifier.height(12.dp))
+        Crossfade(ShopTab.entries[tab], Modifier.fillMaxWidth().weight(1f), tween(180), label = "tab") { t ->
+            when (t) {
+                ShopTab.SKINS -> CardRow(Skins.all, { it.id }) { skin ->
+                    ItemCard(
+                        name = s[skin.nameKey],
+                        price = skin.price,
+                        owned = p.ownedSkins.contains(skin.id),
+                        selected = p.selectedSkin == skin.id,
+                        affordable = p.totalCoins >= skin.price,
+                        onTap = { vm.onSkinTapped(skin.id) },
+                    ) { SkinPreview(skin, Modifier.size(width = 120.dp, height = 68.dp)) }
+                }
+                ShopTab.THEMES -> CardRow(WorldThemes.all, { it.id }) { theme ->
+                    ItemCard(
+                        name = s[theme.nameKey],
+                        price = theme.price,
+                        owned = p.ownedThemes.contains(theme.id),
+                        selected = p.selectedTheme == theme.id,
+                        affordable = p.totalCoins >= theme.price,
+                        onTap = { vm.onThemeTapped(theme.id) },
+                    ) { ThemePreview(theme, Modifier.fillMaxSize()) }
+                }
+                ShopTab.SHIELD -> ShieldTab(p, vm)
+                ShopTab.BOOSTS -> Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (boost in Boosts.all) {
+                        BoostCard(boost, pendingStock(p, boost), p.totalCoins >= boost.price, Modifier.weight(1f)) { vm.buyBoost(boost) }
                     }
                 }
+                ShopTab.UPGRADES -> UpgradesTab(p, vm)
             }
-            item {
-                Column {
-                    SectionLabel(s["shop_themes"])
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        Modifier.fillMaxWidth().height(210.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        items(WorldThemes.all, key = { it.id }) { theme ->
-                            ThemeCard(
-                                theme = theme,
-                                owned = p.ownedThemes.contains(theme.id),
-                                selected = p.selectedTheme == theme.id,
-                                affordable = p.totalCoins >= theme.price,
-                                onTap = { vm.onThemeTapped(theme.id) },
-                            )
-                        }
-                    }
-                }
-            }
-            item {
-                Column {
-                    SectionLabel(s["pw_shield"])
-                    Spacer(Modifier.height(10.dp))
-                    ShieldSection(p, vm)
-                    Spacer(Modifier.height(12.dp))
-                    ShieldCapacityCard(p, vm)
-                }
-            }
-            item {
-                Column {
-                    SectionLabel(s["shop_boosts"])
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        Modifier.fillMaxWidth().height(284.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        items(Boosts.all, key = { it.id }) { boost ->
-                            BoostCard(
-                                boost = boost,
-                                stock = pendingStock(p, boost),
-                                affordable = p.totalCoins >= boost.price,
-                                onTap = { vm.buyBoost(boost) },
-                            )
-                        }
-                    }
-                }
-            }
-            item {
-                Column {
-                    SectionLabel(s["duration_upgrades"])
-                    Spacer(Modifier.height(10.dp))
-                    DurationAllCard(p, vm)
-                    for (type in BoostDurationUpgrade.upgradableTypes) {
-                        Spacer(Modifier.height(10.dp))
-                        DurationTypeRow(type, p, vm)
-                    }
-                }
-            }
-        }
-        ScrollHint(
-            visible = listState.canScrollForward,
-            onClick = {
-                scope.launch {
-                    val next = (listState.firstVisibleItemIndex + 1)
-                        .coerceAtMost(listState.layoutInfo.totalItemsCount - 1)
-                    listState.animateScrollToItem(next)
-                }
-            },
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
         }
     }
 }
 
-/**
- * Floating "more below" pill: gently bobs to catch the eye, fades away at the end of the list,
- * and taps through to the next shop section - so it's obvious the garage scrolls vertically.
- */
+/** Underlined text tabs: active tab in white with a 3dp accent bar, the rest dimmed. */
 @Composable
-private fun ScrollHint(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun TabBar(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Panel(Modifier.fillMaxWidth()) {
+        Rule(Modifier.align(Alignment.BottomStart))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            labels.forEachIndexed { i, label ->
+                val active = i == selected
+                val interaction = remember { MutableInteractionSource() }
+                val focused by interaction.collectIsFocusedAsState()
+                val nav = isNavFocus(focused)
+                Box(
+                    Modifier
+                        .clickable(interaction, null) { onSelect(i) }
+                        .background(if (nav) NDColors.PanelRaised else Color.Transparent)
+                        .drawBehind {
+                            if (active) {
+                                val h = 3.dp.toPx()
+                                drawRect(NDColors.Accent, Offset(0f, size.height - h), Size(size.width, h))
+                            }
+                        }
+                        .heightIn(min = 40.dp)
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label.uppercase(),
+                        style = NDType.Button,
+                        color = if (active) NDColors.Text else NDColors.TextFaint,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> CardRow(items: List<T>, key: (T) -> Any, card: @Composable (T) -> Unit) {
+    LazyRow(
+        Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 4.dp),
+    ) {
+        items(items, key = key) { card(it) }
+    }
+}
+
+/** Clickable card shell shared by every shelf item: lifts on press, white ring on D-pad focus. */
+@Composable
+private fun CardShell(
+    onTap: () -> Unit,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val focused by interaction.collectIsFocusedAsState()
+    val nav = isNavFocus(focused)
+    Box(
+        modifier
+            .width(184.dp)
+            .fillMaxHeight()
+            .clip(Corner.panel)
+            .background(if (pressed) NDColors.PanelRaised else NDColors.Panel)
+            .border(
+                BorderStroke(if (nav || selected) 2.dp else 1.dp, if (nav) Color.White else if (selected) NDColors.Accent else Color.Transparent),
+                Corner.panel,
+            )
+            .clickable(interaction, null, onClick = onTap),
+    ) { content() }
+}
+
+@Composable
+private fun ItemCard(
+    name: String,
+    price: Int,
+    owned: Boolean,
+    selected: Boolean,
+    affordable: Boolean,
+    onTap: () -> Unit,
+    preview: @Composable () -> Unit,
+) {
     val s = LocalStrings.current
-    val bob by rememberInfiniteTransition(label = "hint").animateFloat(
-        initialValue = 0f,
-        targetValue = 5f,
-        animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
-        label = "bob",
-    )
-    AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
-        NDCard(
-            shape = Radius.pill,
-            borderColor = NDColors.Gold.copy(alpha = 0.55f),
-            modifier = Modifier
-                .graphicsLayer { translationY = bob * density }
-                .clickable { onClick() },
-        ) {
-            Row(
-                Modifier.padding(start = 10.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.KeyboardArrowDown, null, tint = NDColors.Gold, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(s["shop_more"], style = NDType.LabelSmall, color = NDColors.Gold)
+    CardShell(onTap, selected) {
+        Column(Modifier.padding(10.dp).fillMaxSize()) {
+            PreviewWell(Modifier.fillMaxWidth().weight(1f)) { preview() }
+            Spacer(Modifier.height(12.dp))
+            Text(name.uppercase(), style = NDType.Heading, color = NDColors.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.padding(horizontal = 4.dp).height(26.dp), verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    selected -> Tag(s["selected"], filled = true)
+                    owned -> Overline(s["equip"], color = NDColors.TextDim)
+                    else -> {
+                        CoinIcon(15)
+                        Spacer(Modifier.width(6.dp))
+                        Text(price.toString(), style = NDType.ReadoutSmall, color = if (affordable) NDColors.Text else NDColors.TextFaint)
+                    }
+                }
             }
+            Spacer(Modifier.height(2.dp))
         }
     }
 }
 
-private fun pendingStock(p: ProfileSnapshot, boost: Boost): Int = when (boost.type) {
-    wojtoteka.nightdrive.domain.PowerUpType.MAGNET -> p.pendingMagnetStarts
-    wojtoteka.nightdrive.domain.PowerUpType.SLOWMO -> p.pendingSlowmoStarts
-    wojtoteka.nightdrive.domain.PowerUpType.DOUBLE -> p.pendingDoubleStarts
-    wojtoteka.nightdrive.domain.PowerUpType.COIN_RUSH -> p.pendingCoinRushStarts
-    wojtoteka.nightdrive.domain.PowerUpType.SHIELD -> 0
+@Composable
+private fun PreviewWell(modifier: Modifier, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
+    Box(modifier.clip(Corner.control).background(NDColors.Inset), contentAlignment = Alignment.Center) { content() }
 }
 
 @Composable
-private fun SectionLabel(text: String) {
-    Text(text.uppercase(), style = NDType.LabelSmall, color = NDColors.TextMuted)
+private fun BoostCard(boost: Boost, stock: Int, affordable: Boolean, modifier: Modifier, onBuy: () -> Unit) {
+    val s = LocalStrings.current
+    Panel(modifier.fillMaxHeight()) {
+        Column(Modifier.padding(10.dp).fillMaxSize()) {
+            PreviewWell(Modifier.fillMaxWidth().weight(1f)) {
+                PowerUpGlyph(boost.type, 52)
+                if (stock > 0) {
+                    Tag("${s["in_stock"]} $stock", NDColors.Positive, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Column(Modifier.padding(horizontal = 4.dp)) {
+                Text(s[boost.nameKey].uppercase(), style = NDType.Heading, color = NDColors.Text, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(4.dp))
+                Text(s[boost.descKey], style = NDType.Caption, color = NDColors.TextDim, minLines = 3, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.height(10.dp))
+            BuyButton(boost.price, onBuy, Modifier.fillMaxWidth(), enabled = affordable, prefix = s["buy"].uppercase())
+        }
+    }
 }
 
+// ---- Shield ----------------------------------------------------------------------------------
+
 @Composable
-private fun ShieldSection(p: ProfileSnapshot, vm: GameViewModel) {
+private fun ShieldTab(p: ProfileSnapshot, vm: GameViewModel) {
     val s = LocalStrings.current
     val maxed = p.shieldCharges >= p.shieldMax
-    val affordable = p.totalCoins >= SHIELD_PRICE
-    NDCard(borderColor = NDColors.Cyan.copy(alpha = 0.4f)) {
-        Column(Modifier.padding(16.dp).fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(44.dp).clip(CircleShape).background(NDColors.Cyan.copy(alpha = 0.16f)),
-                    contentAlignment = Alignment.Center,
-                ) { ShieldIcon(22, NDColors.Cyan) }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(s["pw_shield"], style = NDType.Label, color = NDColors.TextPrimary)
-                    Spacer(Modifier.height(2.dp))
-                    Text(s["shop_shield_desc"], style = NDType.BodyMuted, color = NDColors.TextMuted)
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Panel(Modifier.weight(1f).fillMaxHeight()) {
+            Column(Modifier.padding(18.dp).fillMaxSize()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ShieldGlyph(Color(PowerUpType.SHIELD.color), 26.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(s["pw_shield"].uppercase(), style = NDType.Heading, color = NDColors.Text)
+                        Text(s["shop_shield_desc"], style = NDType.Caption, color = NDColors.TextDim)
+                    }
                 }
-                Spacer(Modifier.width(8.dp))
-                StatusPill(
-                    if (maxed) s["max"] else "${p.shieldCharges}/${p.shieldMax}",
-                    if (maxed) NDColors.Green else NDColors.Cyan,
-                )
-            }
-            if (!maxed) {
+                Spacer(Modifier.weight(1f))
+                Overline(s["shield_charges"])
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${p.shieldCharges}/${p.shieldMax}", style = NDType.Readout, color = NDColors.Text)
+                    Spacer(Modifier.width(16.dp))
+                    Pips(p.shieldCharges, p.shieldMax, Color(PowerUpType.SHIELD.color), Modifier.weight(1f))
+                }
                 Spacer(Modifier.height(14.dp))
-                NeonButton(
-                    text = "${s["buy"]} · $SHIELD_PRICE",
-                    onClick = { vm.buyShieldCharge() },
-                    color = NDColors.Gold,
-                    enabled = affordable,
-                    modifier = Modifier.fillMaxWidth(),
+                if (maxed) {
+                    Tag(s["max"], NDColors.Positive)
+                } else {
+                    BuyButton(
+                        SHIELD_PRICE, { vm.buyShieldCharge() }, Modifier.fillMaxWidth(),
+                        enabled = p.totalCoins >= SHIELD_PRICE, prefix = "+1",
+                    )
+                }
+            }
+        }
+        Panel(Modifier.weight(1f).fillMaxHeight(), edge = if (p.shieldCapacityUpgrade) NDColors.Accent else null) {
+            Column(Modifier.padding(18.dp).fillMaxSize()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ShieldGlyph(NDColors.Text, 26.dp, plus = true)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(s["shield_capacity"].uppercase(), style = NDType.Heading, color = NDColors.Text)
+                        Text(s["shield_capacity_d"], style = NDType.Caption, color = NDColors.TextDim)
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                if (p.shieldCapacityUpgrade) {
+                    Tag(s["owned"], filled = true)
+                } else {
+                    BuyButton(
+                        SHIELD_CAPACITY_PRICE, { vm.buyShieldCapacityUpgrade() }, Modifier.fillMaxWidth(),
+                        enabled = p.totalCoins >= SHIELD_CAPACITY_PRICE, prefix = s["buy"].uppercase(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Row of square pips, [filled] of [total] lit. */
+@Composable
+private fun Pips(filled: Int, total: Int, color: Color, modifier: Modifier = Modifier, pip: Dp = 10.dp) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        repeat(total) { i ->
+            Box(
+                Modifier.size(pip).background(if (i < filled) color else Color.Transparent)
+                    .border(BorderStroke(1.dp, if (i < filled) color else NDColors.LineStrong)),
+            )
+        }
+    }
+}
+
+// ---- Duration upgrades -----------------------------------------------------------------------
+
+@Composable
+private fun UpgradesTab(p: ProfileSnapshot, vm: GameViewModel) {
+    val s = LocalStrings.current
+    Panel(Modifier.fillMaxSize()) {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            UpgradeRow(
+                icon = { Text("%", style = NDType.Title, color = NDColors.Accent) },
+                title = s["boost_duration_all"],
+                detail = s["boost_duration_all_d"],
+                level = p.boostDurationLevelAll,
+                nextPrice = BoostDurationUpgrade.nextPriceAll(p.boostDurationLevelAll),
+                coins = p.totalCoins,
+                onBuy = { vm.buyBoostDurationAll() },
+            )
+            for (type in BoostDurationUpgrade.upgradableTypes) {
+                Rule()
+                val level = durationLevel(p, type)
+                val total = BoostDurationUpgrade.percent(p.boostDurationLevelAll) + BoostDurationUpgrade.percent(level)
+                UpgradeRow(
+                    icon = { PowerUpGlyph(type, 30) },
+                    title = s[type.labelKey],
+                    detail = if (total > 0) "${s["total_bonus"]} +$total%" else null,
+                    level = level,
+                    nextPrice = BoostDurationUpgrade.nextPriceEach(level),
+                    coins = p.totalCoins,
+                    onBuy = { vm.buyBoostDurationFor(type) },
                 )
             }
         }
     }
 }
 
-/** One-time permanent purchase: raises the shield charge cap (see [wojtoteka.nightdrive.domain.PlayerProfile.shieldMax]). */
 @Composable
-private fun ShieldCapacityCard(p: ProfileSnapshot, vm: GameViewModel) {
+private fun UpgradeRow(
+    icon: @Composable () -> Unit,
+    title: String,
+    detail: String?,
+    level: Int,
+    nextPrice: Int?,
+    coins: Int,
+    onBuy: () -> Unit,
+) {
     val s = LocalStrings.current
-    val owned = p.shieldCapacityUpgrade
-    val affordable = p.totalCoins >= SHIELD_CAPACITY_PRICE
-    NDCard(borderColor = (if (owned) NDColors.Green else NDColors.Violet).copy(alpha = 0.4f)) {
-        Row(Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(44.dp).clip(CircleShape).background(NDColors.Violet.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center,
-            ) { ShieldIcon(22, NDColors.Violet) }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(s["shield_capacity"], style = NDType.Label, color = NDColors.TextPrimary)
-                Spacer(Modifier.height(2.dp))
-                Text(s["shield_capacity_d"], style = NDType.BodyMuted, color = NDColors.TextMuted)
-            }
-            Spacer(Modifier.width(12.dp))
-            if (owned) {
-                StatusPill(s["owned"], NDColors.Green)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(36.dp), contentAlignment = Alignment.Center) { icon() }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title.uppercase(), style = NDType.Heading, color = NDColors.Text)
+            if (detail != null) Text(detail, style = NDType.Caption, color = NDColors.TextDim, maxLines = 2)
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            Overline("${s["tier"]} $level/${BoostDurationUpgrade.MAX_LEVEL}")
+            Spacer(Modifier.height(5.dp))
+            Pips(level, BoostDurationUpgrade.MAX_LEVEL, NDColors.Accent, pip = 8.dp)
+        }
+        Spacer(Modifier.width(16.dp))
+        Box(Modifier.width(150.dp), contentAlignment = Alignment.CenterEnd) {
+            if (nextPrice == null) {
+                Tag(s["max"], NDColors.Positive)
             } else {
-                NeonButton(
-                    text = "${s["buy"]} · $SHIELD_CAPACITY_PRICE",
-                    onClick = { vm.buyShieldCapacityUpgrade() },
-                    color = NDColors.Violet,
-                    enabled = affordable,
+                BuyButton(
+                    nextPrice, onBuy, Modifier.fillMaxWidth(), enabled = coins >= nextPrice,
+                    prefix = "+${BoostDurationUpgrade.percent(level + 1)}%",
                 )
             }
         }
@@ -339,230 +432,15 @@ private fun durationLevel(p: ProfileSnapshot, type: PowerUpType): Int = when (ty
     PowerUpType.SHIELD -> 0
 }
 
-/** The "+% duration on ALL power-ups" ladder: +20% → +50% → +100%, stacking with per-type tiers. */
-@Composable
-private fun DurationAllCard(p: ProfileSnapshot, vm: GameViewModel) {
-    val s = LocalStrings.current
-    val level = p.boostDurationLevelAll
-    val nextPrice = BoostDurationUpgrade.nextPriceAll(level)
-    val maxed = nextPrice == null
-    NDCard(borderColor = (if (maxed) NDColors.Green else NDColors.Magenta).copy(alpha = 0.4f)) {
-        Row(Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(44.dp).clip(CircleShape).background(NDColors.Magenta.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center,
-            ) { Text("%", style = NDType.Heading, color = NDColors.Magenta) }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(s["boost_duration_all"], style = NDType.Label, color = NDColors.TextPrimary)
-                Spacer(Modifier.height(2.dp))
-                Text(s["boost_duration_all_d"], style = NDType.BodyMuted, color = NDColors.TextMuted)
-            }
-            Spacer(Modifier.width(12.dp))
-            DurationTierAction(
-                level = level,
-                nextPrice = nextPrice,
-                affordable = nextPrice != null && p.totalCoins >= nextPrice,
-                accent = NDColors.Magenta,
-                onBuy = { vm.buyBoostDurationAll() },
-            )
-        }
-    }
+private fun pendingStock(p: ProfileSnapshot, boost: Boost): Int = when (boost.type) {
+    PowerUpType.MAGNET -> p.pendingMagnetStarts
+    PowerUpType.SLOWMO -> p.pendingSlowmoStarts
+    PowerUpType.DOUBLE -> p.pendingDoubleStarts
+    PowerUpType.COIN_RUSH -> p.pendingCoinRushStarts
+    PowerUpType.SHIELD -> 0
 }
 
-/** One power-up's personal duration ladder, with the combined (all + own) bonus shown below. */
-@Composable
-private fun DurationTypeRow(type: PowerUpType, p: ProfileSnapshot, vm: GameViewModel) {
-    val s = LocalStrings.current
-    val color = Color(type.color)
-    val level = durationLevel(p, type)
-    val nextPrice = BoostDurationUpgrade.nextPriceEach(level)
-    val totalPercent = BoostDurationUpgrade.percent(p.boostDurationLevelAll) + BoostDurationUpgrade.percent(level)
-    NDCard(borderColor = color.copy(alpha = 0.35f)) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).background(color.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
-            ) { PowerUpGlyph(type, 20) }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(s[type.labelKey], style = NDType.Label, color = NDColors.TextPrimary)
-                if (totalPercent > 0) {
-                    Spacer(Modifier.height(2.dp))
-                    Text("${s["total_bonus"]}: +$totalPercent%", style = NDType.BodyMuted, color = NDColors.TextMuted)
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            DurationTierAction(
-                level = level,
-                nextPrice = nextPrice,
-                affordable = nextPrice != null && p.totalCoins >= nextPrice,
-                accent = color,
-                onBuy = { vm.buyBoostDurationFor(type) },
-            )
-        }
-    }
-}
-
-/** Right-side action for a duration ladder: the next tier as a buy button, or a "Max" pill. */
-@Composable
-private fun DurationTierAction(level: Int, nextPrice: Int?, affordable: Boolean, accent: Color, onBuy: () -> Unit) {
-    val s = LocalStrings.current
-    if (nextPrice == null) {
-        StatusPill(s["max"], NDColors.Green)
-    } else {
-        NeonButton(
-            text = "+${BoostDurationUpgrade.percent(level + 1)}% · $nextPrice",
-            onClick = onBuy,
-            color = accent,
-            enabled = affordable,
-        )
-    }
-}
-
-@Composable
-private fun BoostCard(boost: Boost, stock: Int, affordable: Boolean, onTap: () -> Unit) {
-    val s = LocalStrings.current
-    val color = Color(boost.type.color)
-    val accent = if (affordable) color else Color.White.copy(alpha = 0.15f)
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    val navFocused = isNavFocus(focused)
-    NDCard(
-        modifier = Modifier.width(168.dp).clickable(interaction, ripple(color = accent)) { onTap() },
-        borderColor = if (navFocused) Color.White else accent.copy(alpha = 0.55f),
-    ) {
-        Column(
-            Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(84.dp)
-                    .clip(Radius.small)
-                    .background(Color(0x33101228)),
-                contentAlignment = Alignment.Center,
-            ) { PowerUpGlyph(boost.type, size = 40) }
-            Spacer(Modifier.height(12.dp))
-            // Fixed line counts + an always-reserved stock slot keep all four cards the same
-            // height, whatever the description length or stock state - the row reads as one shelf.
-            Text(
-                s[boost.nameKey], style = NDType.Label, color = NDColors.TextPrimary,
-                textAlign = TextAlign.Center, minLines = 1, maxLines = 2,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                s[boost.descKey], style = NDType.Caption, color = NDColors.TextMuted,
-                textAlign = TextAlign.Center, minLines = 3, maxLines = 3,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CoinIcon(15)
-                Spacer(Modifier.width(6.dp))
-                Text(boost.price.toString(), style = NDType.Label, color = if (affordable) NDColors.Gold else NDColors.TextMuted)
-            }
-            Spacer(Modifier.height(8.dp))
-            Box(Modifier.height(26.dp), contentAlignment = Alignment.Center) {
-                if (stock > 0) StatusPill("${s["in_stock"]}: $stock", NDColors.Green)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SkinCard(skin: Skin, owned: Boolean, selected: Boolean, affordable: Boolean, onTap: () -> Unit) {
-    val s = LocalStrings.current
-    val accent = when {
-        selected -> NDColors.Green
-        owned -> NDColors.Cyan
-        affordable -> NDColors.Gold
-        else -> Color.White.copy(alpha = 0.15f)
-    }
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    val navFocused = isNavFocus(focused)
-    NDCard(
-        modifier = Modifier.width(168.dp).clickable(
-            interaction, ripple(color = accent), enabled = selected.not() || owned,
-        ) { onTap() },
-        borderColor = if (navFocused) Color.White else accent.copy(alpha = 0.55f),
-    ) {
-        Column(
-            Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(84.dp)
-                    .clip(Radius.small)
-                    .background(Color(0x33101228)),
-                contentAlignment = Alignment.Center,
-            ) {
-                SkinPreview(skin.bodyColor, skin.accentColor, Modifier.size(width = 118.dp, height = 66.dp))
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(s[skin.nameKey], style = NDType.Label, color = NDColors.TextPrimary)
-            Spacer(Modifier.height(8.dp))
-            when {
-                selected -> StatusPill(s["selected"], NDColors.Green)
-                owned -> StatusPill(s["equip"], NDColors.Cyan)
-                else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    CoinIcon(15)
-                    Spacer(Modifier.width(6.dp))
-                    Text(skin.price.toString(), style = NDType.Label, color = if (affordable) NDColors.Gold else NDColors.TextMuted)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThemeCard(theme: WorldTheme, owned: Boolean, selected: Boolean, affordable: Boolean, onTap: () -> Unit) {
-    val s = LocalStrings.current
-    val accent = when {
-        selected -> NDColors.Green
-        owned -> NDColors.Cyan
-        affordable -> NDColors.Gold
-        else -> Color.White.copy(alpha = 0.15f)
-    }
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    val navFocused = isNavFocus(focused)
-    NDCard(
-        modifier = Modifier.width(168.dp).clickable(
-            interaction, ripple(color = accent), enabled = selected.not() || owned,
-        ) { onTap() },
-        borderColor = if (navFocused) Color.White else accent.copy(alpha = 0.55f),
-    ) {
-        Column(
-            Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(84.dp)
-                    .clip(Radius.small),
-            ) {
-                ThemePreview(theme, Modifier.fillMaxWidth().height(84.dp))
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(s[theme.nameKey], style = NDType.Label, color = NDColors.TextPrimary)
-            Spacer(Modifier.height(8.dp))
-            when {
-                selected -> StatusPill(s["selected"], NDColors.Green)
-                owned -> StatusPill(s["equip"], NDColors.Cyan)
-                else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    CoinIcon(15)
-                    Spacer(Modifier.width(6.dp))
-                    Text(theme.price.toString(), style = NDType.Label, color = if (affordable) NDColors.Gold else NDColors.TextMuted)
-                }
-            }
-        }
-    }
-}
+// ---- Previews --------------------------------------------------------------------------------
 
 /** Miniature of the world in the theme's colours: sky, retro sun, horizon and grid road. */
 @Composable
@@ -570,13 +448,11 @@ private fun ThemePreview(theme: WorldTheme, modifier: Modifier) {
     Canvas(modifier) {
         val w = size.width; val h = size.height
         val horizon = h * 0.56f
-        // sky
         drawRect(
             Brush.verticalGradient(listOf(Color(theme.skyTop), Color(theme.skyBottom)), startY = 0f, endY = horizon),
             size = Size(w, horizon),
         )
-        // sun sitting on the horizon
-        val sunR = w * 0.15f
+        val sunR = h * 0.26f
         val sunC = Offset(w / 2f, horizon - sunR * 0.35f)
         drawCircle(
             Brush.verticalGradient(
@@ -585,57 +461,35 @@ private fun ThemePreview(theme: WorldTheme, modifier: Modifier) {
             ),
             radius = sunR, center = sunC,
         )
-        // road
         drawRect(
             Brush.verticalGradient(listOf(Color(theme.roadTop), Color(theme.roadBottom)), startY = horizon, endY = h),
             topLeft = Offset(0f, horizon), size = Size(w, h - horizon),
         )
-        // converging grid rails
         val grid = Color(theme.grid).copy(alpha = 0.45f)
-        for (i in -3..3) {
-            drawLine(grid, Offset(w / 2f + i * w * 0.07f, horizon), Offset(w / 2f + i * w * 0.30f, h), strokeWidth = w * 0.008f)
+        for (i in -4..4) {
+            drawLine(grid, Offset(w / 2f + i * w * 0.07f, horizon), Offset(w / 2f + i * w * 0.30f, h), strokeWidth = 1.dp.toPx())
         }
-        // neon horizon line on top
-        drawLine(Color(theme.horizonLine), Offset(0f, horizon), Offset(w, horizon), strokeWidth = h * 0.03f)
+        drawLine(Color(theme.horizonLine), Offset(0f, horizon), Offset(w, horizon), strokeWidth = 1.5.dp.toPx())
     }
 }
 
+/** Wireframe car in the skin's colours - same construction as the in-game car. */
 @Composable
-private fun StatusPill(text: String, color: Color) {
-    Box(
-        Modifier
-            .clip(Radius.pill)
-            .background(color.copy(alpha = 0.16f))
-            .border(BorderStroke(1.dp, color.copy(alpha = 0.6f)), Radius.pill)
-            .padding(horizontal = 14.dp, vertical = 5.dp),
-    ) {
-        Text(text, style = NDType.LabelSmall, color = color)
-    }
-}
-
-/** A small wireframe car preview matching the in-game art style. */
-@Composable
-private fun SkinPreview(bodyColor: Long, accentColor: Long, modifier: Modifier) {
+private fun SkinPreview(skin: Skin, modifier: Modifier) {
     Canvas(modifier) {
         val w = size.width; val h = size.height
-        val body = Color(bodyColor); val acc = Color(accentColor)
-        val sw = w * 0.02f
-        // far face (upper-right)
-        val fx0 = w * 0.42f; val fx1 = w * 0.90f; val fy0 = h * 0.24f; val fy1 = h * 0.56f
-        // near face (lower-left)
-        val nx0 = w * 0.12f; val nx1 = w * 0.66f; val ny0 = h * 0.44f; val ny1 = h * 0.78f
-        // connecting edges
+        val body = Color(skin.bodyColor); val acc = Color(skin.accentColor)
+        val sw = 1.6.dp.toPx()
+        val fx0 = w * 0.42f; val fx1 = w * 0.90f; val fy0 = h * 0.18f; val fy1 = h * 0.52f
+        val nx0 = w * 0.10f; val nx1 = w * 0.66f; val ny0 = h * 0.40f; val ny1 = h * 0.76f
         drawLine(acc, Offset(nx0, ny0), Offset(fx0, fy0), sw, StrokeCap.Round)
         drawLine(acc, Offset(nx1, ny0), Offset(fx1, fy0), sw, StrokeCap.Round)
         drawLine(acc, Offset(nx1, ny1), Offset(fx1, fy1), sw, StrokeCap.Round)
         drawLine(acc, Offset(nx0, ny1), Offset(fx0, fy1), sw, StrokeCap.Round)
-        // far body
         drawRect(acc, Offset(fx0, fy0), Size(fx1 - fx0, fy1 - fy0), style = Stroke(sw))
-        // near body
         drawRect(body, Offset(nx0, ny0), Size(nx1 - nx0, ny1 - ny0), style = Stroke(sw * 1.3f))
-        // wheels
         val r = h * 0.12f
-        drawCircle(body, r, Offset(nx0 + r, ny1), style = Stroke(sw))
-        drawCircle(body, r, Offset(nx1 - r, ny1), style = Stroke(sw))
+        drawCircle(body, r, Offset(nx0 + r * 1.2f, ny1), style = Stroke(sw))
+        drawCircle(body, r, Offset(nx1 - r * 1.2f, ny1), style = Stroke(sw))
     }
 }

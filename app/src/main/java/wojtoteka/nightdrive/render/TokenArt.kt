@@ -37,9 +37,9 @@ object TokenArt {
     }
 
     /** Coin = rings + "$" in the original Edunline face. */
-    fun drawCoin(rc: RetroCanvas, x: Float, y: Float, size: Float, spin: Float, lineWidth: Float) {
-        drawRings(rc, x, y, size, spin, COIN_COLOR, lineWidth)
-        rc.drawText("$", x, y, size / 1.3f, COIN_COLOR)
+    fun drawCoin(rc: RetroCanvas, x: Float, y: Float, size: Float, spin: Float, lineWidth: Float, color: Long = COIN_COLOR) {
+        drawRings(rc, x, y, size, spin, color, lineWidth)
+        rc.drawText("$", x, y, size / 1.3f, color)
     }
 
     /** Power-up = the same rings in the power-up's colour, with its own badge instead of "$". */

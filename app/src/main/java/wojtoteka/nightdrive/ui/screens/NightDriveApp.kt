@@ -19,14 +19,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.core.view.WindowCompat
 import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
 import wojtoteka.nightdrive.ui.components.GlowText
-import wojtoteka.nightdrive.ui.components.NDCard
+import wojtoteka.nightdrive.ui.components.Overline
+import wojtoteka.nightdrive.ui.components.Panel
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import wojtoteka.nightdrive.ui.theme.LocalStrings
 import wojtoteka.nightdrive.ui.theme.NDColors
 import wojtoteka.nightdrive.ui.theme.NDType
@@ -49,7 +50,7 @@ fun NightDriveApp(vm: GameViewModel) {
             }
         }
 
-        Box(Modifier.fillMaxSize().background(NDColors.Background)) {
+        Box(Modifier.fillMaxSize().background(NDColors.Ink)) {
             WorldBackground(vm, Modifier.fillMaxSize())
 
             if (!vm.isReady) {
@@ -75,7 +76,7 @@ fun NightDriveApp(vm: GameViewModel) {
 @Composable
 private fun LoadingOverlay() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        GlowText("NIGHT DRIVE", NDType.Brand, color = NDColors.TextPrimary, glow = NDColors.Magenta)
+        GlowText("NIGHT DRIVE", NDType.Brand, color = NDColors.LogoWhite, glow = NDColors.LogoMagenta)
     }
 }
 
@@ -91,14 +92,11 @@ private fun AchievementToast(vm: GameViewModel, modifier: Modifier = Modifier) {
             .windowInsetsPadding(WindowInsets.displayCutout)
             .padding(top = 14.dp),
     ) {
-        NDCard(borderColor = NDColors.Gold.copy(alpha = 0.5f)) {
-            Box(Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-                val name = key?.let { strings[it] } ?: ""
-                Text(
-                    "★  ${strings["achievement_unlocked"]}: $name",
-                    style = NDType.Label,
-                    color = NDColors.Gold,
-                )
+        Panel(fill = NDColors.PanelSolid, edge = NDColors.Accent) {
+            Column(Modifier.padding(start = 20.dp, end = 22.dp, top = 10.dp, bottom = 11.dp)) {
+                Overline(strings["achievement_unlocked"], color = NDColors.Accent)
+                Spacer(Modifier.height(3.dp))
+                Text(key?.let { strings[it] } ?: "", style = NDType.Heading, color = NDColors.Text)
             }
         }
     }

@@ -1,11 +1,7 @@
 package wojtoteka.nightdrive.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,8 +13,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,24 +21,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import wojtoteka.nightdrive.BuildConfig
 import wojtoteka.nightdrive.domain.Language
 import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
 import wojtoteka.nightdrive.ui.components.ConfirmDialog
-import wojtoteka.nightdrive.ui.components.GhostButton
-import wojtoteka.nightdrive.ui.components.NeonSwitch
+import wojtoteka.nightdrive.ui.components.Overline
+import wojtoteka.nightdrive.ui.components.Panel
+import wojtoteka.nightdrive.ui.components.Rule
 import wojtoteka.nightdrive.ui.components.ScreenHeader
+import wojtoteka.nightdrive.ui.components.SecondaryButton
 import wojtoteka.nightdrive.ui.components.SegmentedControl
 import wojtoteka.nightdrive.ui.components.SettingRow
+import wojtoteka.nightdrive.ui.components.Toggle
 import wojtoteka.nightdrive.ui.theme.LocalStrings
 import wojtoteka.nightdrive.ui.theme.NDColors
 import wojtoteka.nightdrive.ui.theme.NDType
-import wojtoteka.nightdrive.ui.theme.Radius
+import wojtoteka.nightdrive.ui.theme.Space
 
 @Composable
 fun SettingsScreen(vm: GameViewModel) {
@@ -57,55 +51,51 @@ fun SettingsScreen(vm: GameViewModel) {
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(horizontal = 22.dp, vertical = 14.dp),
+            .padding(horizontal = Space.gutter, vertical = 14.dp),
     ) {
-        ScreenHeader(title = s["settings"], onBack = { vm.goTo(Destination.MENU) }, accent = NDColors.Cyan)
-        Spacer(Modifier.height(14.dp))
+        ScreenHeader(title = s["settings"], onBack = { vm.goTo(Destination.MENU) }, backLabel = s["back"])
+        Spacer(Modifier.height(Space.section))
 
         Column(
             Modifier
                 .fillMaxWidth()
-                .widthIn(max = 620.dp)
+                .widthIn(max = 640.dp)
                 .align(Alignment.CenterHorizontally)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SettingRow(s["music"], null) {
-                NeonSwitch(p.musicEnabled, { vm.setMusicEnabled(it) }, NDColors.Cyan)
+            Panel(Modifier.fillMaxWidth()) {
+                Column {
+                    SettingRow(s["music"], null) { Toggle(p.musicEnabled) { vm.setMusicEnabled(it) } }
+                    Rule()
+                    SettingRow(s["sound_effects"], null) { Toggle(p.sfxEnabled) { vm.setSfxEnabled(it) } }
+                    Rule()
+                    SettingRow(s["haptics"], null) { Toggle(p.hapticsEnabled) { vm.setHapticsEnabled(it) } }
+                    Rule()
+                    SettingRow(s["language"], null) {
+                        val langs = listOf(Language.SYSTEM, Language.EN, Language.PL)
+                        SegmentedControl(
+                            options = listOf(s["lang_system"], "EN", "PL"),
+                            selectedIndex = langs.indexOf(p.language).coerceAtLeast(0),
+                            onSelect = { vm.changeLanguage(langs[it]) },
+                        )
+                    }
+                }
             }
-            SettingRow(s["sound_effects"], null) {
-                NeonSwitch(p.sfxEnabled, { vm.setSfxEnabled(it) }, NDColors.Magenta)
+            Spacer(Modifier.height(10.dp))
+            Panel(Modifier.fillMaxWidth()) {
+                SettingRow(s["reset_progress"], s["reset_progress_desc"]) {
+                    SecondaryButton(s["reset_progress"], { showReset = true }, tone = NDColors.Danger)
+                }
             }
-            SettingRow(s["haptics"], null) {
-                NeonSwitch(p.hapticsEnabled, { vm.setHapticsEnabled(it) }, NDColors.Violet)
-            }
-            SettingRow(s["language"], null) {
-                val langs = listOf(Language.SYSTEM, Language.EN, Language.PL)
-                val labels = listOf(s["lang_system"], "EN", "PL")
-                SegmentedControl(
-                    options = labels,
-                    selectedIndex = langs.indexOf(p.language).coerceAtLeast(0),
-                    onSelect = { vm.changeLanguage(langs[it]) },
-                )
-            }
-            SettingRow(s["reset_progress"], s["reset_progress_desc"]) {
-                GhostButton(s["reset_progress"], { showReset = true }, color = NDColors.Red, icon = Icons.Filled.Refresh)
-            }
-            Spacer(Modifier.height(18.dp))
-            Box(
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .clip(Radius.pill)
-                    .background(Color(0xF70D0F22))
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    "${s["version"]} ${BuildConfig.VERSION_NAME}  •  ${s["credits"]}",
-                    style = NDType.Caption,
-                    color = NDColors.TextMuted,
-                    textAlign = TextAlign.Center,
-                )
-            }
+            Spacer(Modifier.height(Space.section))
+            Overline("Night Drive ${BuildConfig.VERSION_NAME}", Modifier.align(Alignment.CenterHorizontally))
+            Spacer(Modifier.height(4.dp))
+            Text(
+                s["credits"],
+                style = NDType.Caption,
+                color = NDColors.TextFaint,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
             Spacer(Modifier.height(8.dp))
         }
     }

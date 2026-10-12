@@ -3,6 +3,7 @@ package wojtoteka.nightdrive.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -12,34 +13,32 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import wojtoteka.nightdrive.domain.Achievements
 import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
-import wojtoteka.nightdrive.ui.components.CoinPill
-import wojtoteka.nightdrive.ui.components.CircleIconButton
-import wojtoteka.nightdrive.ui.components.GhostButton
+import wojtoteka.nightdrive.ui.components.CoinReadout
 import wojtoteka.nightdrive.ui.components.GlowText
-import wojtoteka.nightdrive.ui.components.NDCard
-import wojtoteka.nightdrive.ui.components.NeonButton
-import wojtoteka.nightdrive.ui.components.NeonProgress
-import wojtoteka.nightdrive.ui.components.StatChip
+import wojtoteka.nightdrive.ui.components.Meter
+import wojtoteka.nightdrive.ui.components.NavRow
+import wojtoteka.nightdrive.ui.components.Overline
+import wojtoteka.nightdrive.ui.components.Panel
+import wojtoteka.nightdrive.ui.components.PrimaryButton
+import wojtoteka.nightdrive.ui.components.Readout
+import wojtoteka.nightdrive.ui.components.Rule
+import wojtoteka.nightdrive.ui.components.SlidersGlyph
+import wojtoteka.nightdrive.ui.components.SquareIconButton
+import wojtoteka.nightdrive.ui.components.VRule
 import wojtoteka.nightdrive.ui.theme.LocalStrings
 import wojtoteka.nightdrive.ui.theme.NDColors
 import wojtoteka.nightdrive.ui.theme.NDType
+import wojtoteka.nightdrive.ui.theme.Space
 
 @Composable
 fun MenuScreen(vm: GameViewModel) {
@@ -50,71 +49,77 @@ fun MenuScreen(vm: GameViewModel) {
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(horizontal = 22.dp, vertical = 14.dp),
+            .padding(horizontal = Space.gutter, vertical = 14.dp),
     ) {
-        // Top bar: coins + settings
-        Row(
-            Modifier.align(Alignment.TopEnd),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CoinPill(p.totalCoins)
-            Spacer(Modifier.width(10.dp))
-            CircleIconButton(Icons.Filled.Settings, { vm.goTo(Destination.SETTINGS) }, tint = NDColors.TextSecondary, contentDescription = s["settings"])
+        // Top right: balance + settings
+        Row(Modifier.align(Alignment.TopEnd), verticalAlignment = Alignment.CenterVertically) {
+            Panel {
+                CoinReadout(p.totalCoins, Modifier.padding(horizontal = 14.dp, vertical = 11.dp))
+            }
+            Spacer(Modifier.width(8.dp))
+            SquareIconButton({ vm.goTo(Destination.SETTINGS) }, contentDescription = s["settings"]) { SlidersGlyph() }
         }
 
-        Row(
-            Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Left: brand + stats + daily
+        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+            // Left: logo, records, daily
             Column(Modifier.weight(1f)) {
-                GlowText("NIGHT", NDType.Brand, color = NDColors.TextPrimary, glow = NDColors.Cyan)
-                GlowText("DRIVE", NDType.Brand, color = NDColors.Magenta, glow = NDColors.Magenta)
+                GlowText("NIGHT", NDType.Brand, color = NDColors.LogoWhite, glow = NDColors.LogoCyan)
+                GlowText("DRIVE", NDType.Brand, color = NDColors.LogoMagenta, glow = NDColors.LogoMagenta)
                 Spacer(Modifier.height(6.dp))
-                Text(s["app_tagline"], style = NDType.Label, color = NDColors.TextSecondary)
-                Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatChip(s["high_score_label"], p.highScore.toString(), NDColors.Magenta)
-                    StatChip(s["best_time"], formatTime(p.bestTimeSec), NDColors.Cyan)
+                Overline(s["app_tagline"], color = NDColors.TextDim)
+                Spacer(Modifier.height(Space.section))
+                Column(Modifier.widthIn(max = 340.dp)) {
+                    RecordsPanel(vm)
+                    Spacer(Modifier.height(8.dp))
+                    DailyPanel(vm)
                 }
-                Spacer(Modifier.height(12.dp))
-                DailyCard(vm)
             }
 
-            Spacer(Modifier.width(26.dp))
+            Spacer(Modifier.width(28.dp))
 
-            // Right: play + secondary actions
-            Column(
-                Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                NeonButton(
-                    text = s["play"],
-                    onClick = { vm.startGame() },
-                    color = NDColors.Cyan,
-                    icon = Icons.Filled.PlayArrow,
-                    modifier = Modifier.fillMaxWidth(0.82f).height(64.dp),
-                )
-                Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    GhostButton(s["shop"], { vm.goTo(Destination.SHOP) }, color = NDColors.Gold, icon = Icons.Filled.ShoppingCart)
-                    GhostButton(s["leaderboard"], { vm.goTo(Destination.LEADERBOARD) }, color = NDColors.Cyan, icon = Icons.AutoMirrored.Filled.List)
+            // Right: the one big action, then the rest as a list
+            Column(Modifier.width(360.dp)) {
+                Spacer(Modifier.height(40.dp))
+                PrimaryButton(s["play"], { vm.startGame() }, Modifier.fillMaxWidth(), large = true)
+                Spacer(Modifier.height(10.dp))
+                Panel(Modifier.fillMaxWidth()) {
+                    Column {
+                        NavRow(s["shop"], { vm.goTo(Destination.SHOP) })
+                        Rule()
+                        NavRow(s["leaderboard"], { vm.goTo(Destination.LEADERBOARD) })
+                        Rule()
+                        NavRow(
+                            s["achievements"], { vm.goTo(Destination.ACHIEVEMENTS) },
+                            detail = "${p.unlockedAchievements.size}/${Achievements.all.size}",
+                        )
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
-                run {
-                    val unlocked = p.unlockedAchievements.size
-                    GhostButton("${s["achievements"]}  $unlocked/${Achievements.all.size}", { vm.goTo(Destination.ACHIEVEMENTS) }, color = NDColors.Violet, icon = Icons.Filled.Star)
-                }
-                Spacer(Modifier.height(10.dp))
-                Text(s["tip_controls"], style = NDType.Caption, color = NDColors.TextMuted, textAlign = TextAlign.Center)
+                Text(s["tip_controls"], style = NDType.Caption, color = NDColors.TextFaint)
             }
         }
     }
 }
 
 @Composable
-private fun DailyCard(vm: GameViewModel) {
+private fun RecordsPanel(vm: GameViewModel) {
+    val s = LocalStrings.current
+    val p = vm.profileState
+    Panel(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.padding(horizontal = 18.dp, vertical = 14.dp).height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Readout(s["high_score_label"], p.highScore.toString(), Modifier.weight(1f))
+            VRule(40.dp)
+            Spacer(Modifier.width(18.dp))
+            Readout(s["best_time"], formatTime(p.bestTimeSec), Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun DailyPanel(vm: GameViewModel) {
     val s = LocalStrings.current
     val p = vm.profileState
     // 0 = collect coins, 1 = survive seconds, 2 = hit a combo in one run, 3 = collect power-ups
@@ -130,20 +135,24 @@ private fun DailyCard(vm: GameViewModel) {
         else -> ""
     }
     val fraction = if (p.dailyGoal > 0) p.dailyProgress.toFloat() / p.dailyGoal else 0f
-    NDCard(borderColor = NDColors.Cyan.copy(alpha = 0.25f)) {
-        Column(Modifier.padding(16.dp).width(260.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(s["daily_challenge"].uppercase(), style = NDType.LabelSmall, color = NDColors.Cyan)
-                Text("${s["daily_streak"]}: ${p.dailyStreak}", style = NDType.LabelSmall, color = NDColors.TextMuted)
+    val done = p.dailyCompleted
+    Panel(Modifier.fillMaxWidth(), edge = if (done) NDColors.Positive else null) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Overline(s["daily_challenge"], Modifier.weight(1f))
+                Overline("${s["daily_streak"]} ${p.dailyStreak}", color = NDColors.TextDim)
             }
             Spacer(Modifier.height(8.dp))
-            Text(
-                if (p.dailyCompleted) "${title} - ${s["daily_done"]}" else "$title  ${p.dailyProgress}/${p.dailyGoal}$unitSuffix",
-                style = NDType.Label,
-                color = if (p.dailyCompleted) NDColors.Green else NDColors.TextPrimary,
-            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(title, style = NDType.Heading, color = NDColors.Text, modifier = Modifier.weight(1f))
+                Text(
+                    if (done) s["daily_done"].uppercase() else "${p.dailyProgress}/${p.dailyGoal}$unitSuffix",
+                    style = if (done) NDType.Overline else NDType.ReadoutSmall,
+                    color = if (done) NDColors.Positive else NDColors.TextDim,
+                )
+            }
             Spacer(Modifier.height(10.dp))
-            NeonProgress(fraction, if (p.dailyCompleted) NDColors.Green else NDColors.Cyan)
+            Meter(if (done) 1f else fraction, color = if (done) NDColors.Positive else NDColors.Accent)
         }
     }
 }

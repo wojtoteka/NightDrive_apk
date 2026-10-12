@@ -2,42 +2,37 @@ package wojtoteka.nightdrive.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,10 +41,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import wojtoteka.nightdrive.engine.GamePhase
 import wojtoteka.nightdrive.net.SubmitState
@@ -57,17 +55,26 @@ import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
 import wojtoteka.nightdrive.ui.HudPowerUp
 import wojtoteka.nightdrive.ui.PadDir
+import wojtoteka.nightdrive.ui.components.Bar
 import wojtoteka.nightdrive.ui.components.CoinIcon
-import wojtoteka.nightdrive.ui.components.GlowText
-import wojtoteka.nightdrive.ui.components.NDCard
-import wojtoteka.nightdrive.ui.components.NeonButton
-import wojtoteka.nightdrive.ui.components.NeonProgress
+import wojtoteka.nightdrive.ui.components.Overline
+import wojtoteka.nightdrive.ui.components.Panel
+import wojtoteka.nightdrive.ui.components.PauseGlyph
 import wojtoteka.nightdrive.ui.components.PowerUpGlyph
+import wojtoteka.nightdrive.ui.components.PrimaryButton
+import wojtoteka.nightdrive.ui.components.Readout
+import wojtoteka.nightdrive.ui.components.SecondaryButton
+import wojtoteka.nightdrive.ui.components.SquareIconButton
+import wojtoteka.nightdrive.ui.components.Tag
+import wojtoteka.nightdrive.ui.components.VRule
+import wojtoteka.nightdrive.ui.theme.Corner
 import wojtoteka.nightdrive.ui.theme.LocalStrings
 import wojtoteka.nightdrive.ui.theme.NDColors
 import wojtoteka.nightdrive.ui.theme.NDType
-import wojtoteka.nightdrive.ui.theme.Radius
 import kotlin.math.min
+
+/** Dark drop shadow so HUD text stays legible over the bright sun and neon grid, without a glow. */
+private val hudShadow = Shadow(Color(0xCC000000), Offset(0f, 2f), 6f)
 
 @Composable
 fun GameScreen(vm: GameViewModel) {
@@ -94,7 +101,7 @@ fun GameScreen(vm: GameViewModel) {
         ) {
             HudLeft(vm, Modifier.align(Alignment.TopStart))
             if (hud.phase == GamePhase.PLAYING) {
-                PauseButton(onClick = { vm.togglePause() }, modifier = Modifier.align(Alignment.TopEnd))
+                SquareIconButton({ vm.togglePause() }, Modifier.align(Alignment.TopEnd)) { PauseGlyph() }
                 if (!hud.paused) {
                     DirectionalPad(vm, Modifier.align(Alignment.BottomStart).padding(start = 4.dp, bottom = 4.dp))
                 }
@@ -147,57 +154,55 @@ private fun HudLeft(vm: GameViewModel, modifier: Modifier) {
     val s = LocalStrings.current
     val hud = vm.hud
     Column(modifier) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            GlowText(hud.score.toString(), NDType.Score, color = NDColors.TextPrimary, glow = NDColors.Magenta)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(hud.score.toString(), style = NDType.Score.copy(shadow = hudShadow), color = NDColors.Text)
             if (hud.score > 0 && hud.score >= hud.highScore) {
-                Spacer(Modifier.width(8.dp))
-                Text(s["new_record"], style = NDType.LabelSmall, color = NDColors.Gold, modifier = Modifier.padding(bottom = 8.dp))
+                Spacer(Modifier.width(10.dp))
+                Tag(s["new_record"].trimEnd('!'), filled = true)
             }
         }
         Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (hud.coinsInSession > 0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CoinIcon(14)
-                    Spacer(Modifier.width(5.dp))
-                    Text(hud.coinsInSession.toString(), style = NDType.Label, color = NDColors.Gold)
+                    CoinIcon(16)
+                    Spacer(Modifier.width(6.dp))
+                    Text(hud.coinsInSession.toString(), style = NDType.ReadoutSmall.copy(shadow = hudShadow), color = NDColors.Text)
                 }
             }
-            if (hud.comboMultiplier > 1f) ComboBadge(hud.comboMultiplier)
+            if (hud.comboMultiplier > 1f) ComboTag(hud.comboMultiplier)
         }
         // Live daily progress for every goal type that advances mid-run (coins, combo, power-ups);
-        // the survival type only updates at crash, so it never renders here - same as before.
+        // the survival type only updates at crash, so it never renders here.
         if (!hud.dailyCompleted && hud.dailyProgress > 0) {
-            Spacer(Modifier.height(6.dp))
-            Text("${s["daily_challenge"]}: ${hud.dailyProgress}/${hud.dailyGoal}", style = NDType.LabelSmall, color = NDColors.Cyan)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "${s["daily_challenge"].uppercase()}  ${hud.dailyProgress}/${hud.dailyGoal}",
+                style = NDType.Overline.copy(shadow = hudShadow),
+                color = NDColors.TextDim,
+            )
         }
     }
 }
 
+/** Combo as a split tag: accent block with the multiplier, dark block with the word. */
 @Composable
-private fun ComboBadge(multiplier: Float) {
+private fun ComboTag(multiplier: Float) {
     val s = LocalStrings.current
-    val color = when {
-        multiplier >= 4f -> NDColors.Magenta
-        multiplier >= 3f -> NDColors.Violet
-        multiplier >= 2f -> NDColors.Cyan
-        else -> NDColors.Green
-    }
-    val scale by animateFloatAsState(1f, label = "combo")
-    NDCard(shape = Radius.pill, borderColor = color.copy(alpha = 0.5f), modifier = Modifier.scale(scale)) {
-        Text(
-            "${s["combo"]} ×${fmtMult(multiplier)}",
-            style = NDType.LabelSmall,
-            color = color,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-        )
+    Row(Modifier.clip(Corner.tag)) {
+        Box(Modifier.background(NDColors.Accent).padding(horizontal = 7.dp, vertical = 3.dp)) {
+            Text("×${fmtMult(multiplier)}", style = NDType.Overline, color = NDColors.OnAccent)
+        }
+        Box(Modifier.background(NDColors.PanelSolid).padding(horizontal = 7.dp, vertical = 3.dp)) {
+            Text(s["combo"].uppercase(), style = NDType.Overline, color = NDColors.Text)
+        }
     }
 }
 
 @Composable
 private fun PowerUpPanel(powerups: List<HudPowerUp>, modifier: Modifier) {
     if (powerups.isEmpty()) return
-    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for (pu in powerups) PowerUpRow(pu)
     }
 }
@@ -206,32 +211,36 @@ private fun PowerUpPanel(powerups: List<HudPowerUp>, modifier: Modifier) {
 private fun PowerUpRow(pu: HudPowerUp) {
     val s = LocalStrings.current
     val color = Color(pu.type.color)
-    NDCard(borderColor = color.copy(alpha = 0.35f), shape = Radius.chip, modifier = Modifier.width(148.dp)) {
+    Panel(Modifier.width(164.dp), edge = color) {
         Row(
-            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            Modifier.padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PowerUpGlyph(pu.type, 18)
-            Spacer(Modifier.width(8.dp))
+            PowerUpGlyph(pu.type, 22)
+            Spacer(Modifier.width(9.dp))
             Column(Modifier.weight(1f)) {
-                Text(s[pu.type.labelKey], style = NDType.LabelSmall, color = NDColors.TextPrimary, maxLines = 1)
-                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        s[pu.type.labelKey].uppercase(), style = NDType.Overline, color = NDColors.Text,
+                        maxLines = 1, modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        if (pu.isCharge) "×${pu.chargeCount}" else "${pu.remainingSeconds}s",
+                        style = NDType.Overline,
+                        color = color,
+                    )
+                }
+                Spacer(Modifier.height(5.dp))
                 if (pu.isCharge) {
                     Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        repeat(pu.chargeCount.coerceAtMost(5)) {
-                            Box(Modifier.size(width = 12.dp, height = 3.dp).clip(Radius.pill).background(color))
+                        repeat(pu.chargeCount.coerceAtMost(8)) {
+                            Box(Modifier.size(width = 10.dp, height = 3.dp).background(color))
                         }
                     }
                 } else {
-                    NeonProgress(pu.fraction, color, height = 3)
+                    Bar(pu.fraction, color)
                 }
             }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                if (pu.isCharge) "×${pu.chargeCount}" else "${pu.remainingSeconds}s",
-                style = NDType.LabelSmall,
-                color = color,
-            )
         }
     }
 }
@@ -242,17 +251,17 @@ private fun PowerUpToastView(vm: GameViewModel, modifier: Modifier) {
     val type = vm.powerUpToast
     AnimatedVisibility(
         visible = type != null,
-        enter = scaleIn(initialScale = 0.7f) + fadeIn(),
+        enter = slideInHorizontally { it / 4 } + fadeIn(),
         exit = fadeOut(),
         modifier = modifier,
     ) {
         val t = type
         if (t != null) {
-            NDCard(borderColor = Color(t.color).copy(alpha = 0.6f)) {
-                Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PowerUpGlyph(t, 24)
-                    Spacer(Modifier.width(12.dp))
-                    GlowText(s[t.labelKey], NDType.Heading, color = Color(t.color), glow = Color(t.color), glowRadius = 14f)
+            Panel(fill = NDColors.PanelSolid, edge = Color(t.color)) {
+                Row(Modifier.padding(start = 18.dp, end = 22.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PowerUpGlyph(t, 30)
+                    Spacer(Modifier.width(14.dp))
+                    Text(s[t.labelKey].uppercase(), style = NDType.Title, color = NDColors.Text)
                 }
             }
         }
@@ -263,21 +272,17 @@ private fun PowerUpToastView(vm: GameViewModel, modifier: Modifier) {
 private fun PauseOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
     Box(
-        Modifier.fillMaxSize().background(Color(0xCC05060F)),
+        Modifier.fillMaxSize().background(NDColors.Scrim),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            GlowText(s["paused"], NDType.Brand, color = NDColors.Cyan, glow = NDColors.Cyan)
-            Spacer(Modifier.height(26.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                NeonButton(s["resume"], { vm.togglePause() }, color = NDColors.Green, icon = Icons.Filled.PlayArrow)
-                NeonButton(
-                    s["quit_to_menu"],
-                    { vm.quitToMenu() },
-                    color = NDColors.Magenta,
-                    icon = Icons.Filled.Close,
-                )
-            }
+        Column(Modifier.width(320.dp)) {
+            Overline("${s["score"]} ${vm.hud.score}", color = NDColors.TextDim)
+            Spacer(Modifier.height(4.dp))
+            Text(s["paused"].uppercase(), style = NDType.Display, color = NDColors.Text)
+            Spacer(Modifier.height(20.dp))
+            PrimaryButton(s["resume"], { vm.togglePause() }, Modifier.fillMaxWidth(), large = true)
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton(s["quit_to_menu"], { vm.quitToMenu() }, Modifier.fillMaxWidth())
         }
     }
 }
@@ -287,40 +292,57 @@ private fun GameOverOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
     val hud = vm.hud
     val isRecord = hud.score > 0 && hud.score >= hud.highScore
-    AnimatedVisibility(visible = true, enter = fadeIn() + scaleIn(initialScale = 0.9f), exit = scaleOut() + fadeOut()) {
-        Box(
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(NDColors.Scrim)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            // Keep the content (especially the nickname field) above the soft keyboard.
+            .imePadding(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
             Modifier
-                .fillMaxSize()
-                .background(Color(0xE605060F))
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                // Keep the content (especially the nickname field) above the soft keyboard.
-                .imePadding(),
-            contentAlignment = Alignment.Center,
+                .widthIn(max = 560.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 10.dp, horizontal = 12.dp),
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .padding(vertical = 10.dp, horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                GlowText(s["game_over"], NDType.Brand, color = NDColors.Red, glow = NDColors.Red)
-                Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                    ResultStat(s["score"], hud.score.toString(), NDColors.Cyan)
-                    ResultStat(s["high_score"], hud.highScore.toString(), NDColors.Magenta)
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(s["game_over"].uppercase(), style = NDType.Display, color = NDColors.Text)
                 if (isRecord) {
-                    Text("★ ${s["new_record"]} ★", style = NDType.Heading, color = NDColors.Gold, textAlign = TextAlign.Center)
+                    Spacer(Modifier.width(14.dp))
+                    Tag(s["new_record"].trimEnd('!'), filled = true)
                 }
-                LeaderboardEntrySection(vm)
+            }
+            Spacer(Modifier.height(14.dp))
+            Panel(Modifier.fillMaxWidth()) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    Modifier.padding(horizontal = 18.dp, vertical = 14.dp).height(IntrinsicSize.Min),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    NeonButton(s["play_again"], { vm.restartGame() }, color = NDColors.Green, icon = Icons.Filled.Refresh)
-                    NeonButton(s["main_menu"], { vm.quitToMenu() }, color = NDColors.TextSecondary, icon = Icons.Filled.Close)
-                    NeonButton(s["leaderboard"], { vm.goTo(Destination.LEADERBOARD) }, color = NDColors.Cyan, icon = Icons.AutoMirrored.Filled.List)
+                    Readout(s["score"], hud.score.toString(), Modifier.weight(1f), valueColor = if (isRecord) NDColors.Accent else NDColors.Text)
+                    VRule(40.dp)
+                    Spacer(Modifier.width(18.dp))
+                    Readout(s["high_score"], hud.highScore.toString(), Modifier.weight(1f))
+                    VRule(40.dp)
+                    Spacer(Modifier.width(18.dp))
+                    Column(Modifier.weight(1f)) {
+                        Overline(s["total_coins"])
+                        Spacer(Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CoinIcon(20)
+                            Spacer(Modifier.width(8.dp))
+                            Text("+${hud.coinsInSession}", style = NDType.Readout, color = NDColors.Text)
+                        }
+                    }
                 }
+            }
+            LeaderboardEntrySection(vm)
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrimaryButton(s["play_again"], { vm.restartGame() }, Modifier.weight(1.4f))
+                SecondaryButton(s["leaderboard"], { vm.goTo(Destination.LEADERBOARD) }, Modifier.weight(1f))
+                SecondaryButton(s["main_menu"], { vm.quitToMenu() }, Modifier.weight(0.8f))
             }
         }
     }
@@ -330,60 +352,54 @@ private fun GameOverOverlay(vm: GameViewModel) {
 @Composable
 private fun LeaderboardEntrySection(vm: GameViewModel) {
     val s = LocalStrings.current
-    when (val st = vm.submitState) {
-        is SubmitState.Done ->
-            Text("${s["saved_rank"]} #${st.rank ?: "?"}", style = NDType.Heading, color = NDColors.Green)
-        SubmitState.Submitting ->
-            Text(s["submitting"], style = NDType.Label, color = NDColors.TextSecondary)
-        SubmitState.Failed ->
-            Text(s["submit_failed"], style = NDType.Label, color = NDColors.Red)
-        SubmitState.Offline ->
-            Text(s["submit_offline"], style = NDType.Label, color = NDColors.TextMuted)
-        SubmitState.Idle -> if (vm.scoreQualifies) Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            var name by remember { mutableStateOf(vm.lastNickname) }
-            Text("★ ${s["you_qualified"]}", style = NDType.Heading, color = NDColors.Gold)
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { input ->
-                        name = input.filter { it.isLetterOrDigit() || it in " _.-" }.take(16)
-                    },
-                    singleLine = true,
-                    placeholder = { Text(s["enter_name"], color = NDColors.TextMuted) },
-                    textStyle = NDType.Label.copy(color = NDColors.TextPrimary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        if (name.trim().isNotEmpty()) vm.submitNickname(name)
-                    }),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = NDColors.Surface,
-                        unfocusedContainerColor = NDColors.Surface,
-                        focusedIndicatorColor = NDColors.Cyan,
-                        unfocusedIndicatorColor = NDColors.Outline,
-                        cursorColor = NDColors.Cyan,
-                    ),
-                    modifier = Modifier.width(220.dp),
-                )
-                NeonButton(
-                    s["submit_score"],
-                    { vm.submitNickname(name) },
-                    color = NDColors.Gold,
-                    enabled = name.trim().isNotEmpty(),
-                )
+    val line: Pair<String, Color>? = when (val st = vm.submitState) {
+        is SubmitState.Done -> "${s["saved_rank"]} #${st.rank ?: "?"}" to NDColors.Positive
+        SubmitState.Submitting -> s["submitting"] to NDColors.TextDim
+        SubmitState.Failed -> s["submit_failed"] to NDColors.Danger
+        SubmitState.Offline -> s["submit_offline"] to NDColors.TextFaint
+        SubmitState.Idle -> null
+    }
+    if (line != null) {
+        Spacer(Modifier.height(10.dp))
+        Overline(line.first, color = line.second)
+        return
+    }
+    if (!vm.scoreQualifies) return
+
+    var name by remember { mutableStateOf(vm.lastNickname) }
+    val submit = { if (name.trim().isNotEmpty()) vm.submitNickname(name) }
+    Spacer(Modifier.height(8.dp))
+    Panel(Modifier.fillMaxWidth(), edge = NDColors.Accent) {
+        Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)) {
+            Overline(s["you_qualified"], color = NDColors.Accent)
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = 44.dp)
+                        .clip(Corner.control)
+                        .background(NDColors.Inset)
+                        .border(BorderStroke(1.dp, NDColors.LineStrong), Corner.control)
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (name.isEmpty()) Text(s["enter_name"], style = NDType.Label, color = NDColors.TextFaint)
+                    BasicTextField(
+                        value = name,
+                        onValueChange = { input -> name = input.filter { it.isLetterOrDigit() || it in " _.-" }.take(16) },
+                        singleLine = true,
+                        textStyle = NDType.Label.copy(color = NDColors.Text),
+                        cursorBrush = SolidColor(NDColors.Accent),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                PrimaryButton(s["submit_score"], { submit() }, enabled = name.trim().isNotEmpty())
             }
         }
-    }
-}
-
-@Composable
-private fun ResultStat(label: String, value: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label.uppercase(), style = NDType.LabelSmall, color = NDColors.TextMuted)
-        Spacer(Modifier.height(4.dp))
-        GlowText(value, NDType.Score, color = color, glow = color, glowRadius = 16f)
     }
 }
 
@@ -430,7 +446,7 @@ private fun DirectionalPad(vm: GameViewModel, modifier: Modifier = Modifier) {
 }
 
 /** Maps a touch position within the pad's 3x3 cell grid to the direction(s) it represents. */
-private fun padDirsAt(pos: androidx.compose.ui.geometry.Offset, cellPx: Float): Set<PadDir> {
+private fun padDirsAt(pos: Offset, cellPx: Float): Set<PadDir> {
     val col = (pos.x / cellPx).toInt().coerceIn(0, 2)
     val row = (pos.y / cellPx).toInt().coerceIn(0, 2)
     return when {
@@ -450,52 +466,23 @@ private fun padDirsAt(pos: androidx.compose.ui.geometry.Offset, cellPx: Float): 
 private fun PadButton(dir: PadDir, pressed: Boolean, modifier: Modifier) {
     Box(
         modifier
-            .clip(Radius.pill)
-            .background(if (pressed) Color(0x8822E9FF) else Color(0x5A0D0F22))
-            .border(
-                androidx.compose.foundation.BorderStroke(
-                    1.5.dp,
-                    if (pressed) NDColors.Cyan else Color.White.copy(alpha = 0.35f),
-                ),
-                Radius.pill,
-            ),
+            .padding(3.dp)
+            .clip(Corner.panel)
+            .background(if (pressed) NDColors.Accent else Color(0x8C0D0D12))
+            .border(BorderStroke(1.dp, if (pressed) NDColors.Accent else Color.White.copy(alpha = 0.22f)), Corner.panel),
         contentAlignment = Alignment.Center,
     ) {
-        androidx.compose.foundation.Canvas(Modifier.size(20.dp)) {
+        Canvas(Modifier.size(16.dp)) {
             val w = size.width; val h = size.height
-            val p = androidx.compose.ui.graphics.Path()
+            val p = Path()
             when (dir) {
-                PadDir.UP -> { p.moveTo(w / 2, 0f); p.lineTo(w, h); p.lineTo(0f, h) }
-                PadDir.DOWN -> { p.moveTo(0f, 0f); p.lineTo(w, 0f); p.lineTo(w / 2, h) }
-                PadDir.LEFT -> { p.moveTo(w, 0f); p.lineTo(w, h); p.lineTo(0f, h / 2) }
-                PadDir.RIGHT -> { p.moveTo(0f, 0f); p.lineTo(w, h / 2); p.lineTo(0f, h) }
+                PadDir.UP -> { p.moveTo(w / 2, h * 0.1f); p.lineTo(w, h * 0.85f); p.lineTo(0f, h * 0.85f) }
+                PadDir.DOWN -> { p.moveTo(0f, h * 0.15f); p.lineTo(w, h * 0.15f); p.lineTo(w / 2, h * 0.9f) }
+                PadDir.LEFT -> { p.moveTo(w * 0.85f, 0f); p.lineTo(w * 0.85f, h); p.lineTo(w * 0.1f, h / 2) }
+                PadDir.RIGHT -> { p.moveTo(w * 0.15f, 0f); p.lineTo(w * 0.9f, h / 2); p.lineTo(w * 0.15f, h) }
             }
             p.close()
-            drawPath(p, if (pressed) Color.White else Color.White.copy(alpha = 0.85f))
+            drawPath(p, if (pressed) NDColors.OnAccent else Color.White.copy(alpha = 0.85f))
         }
     }
 }
-
-/** Round pause button drawn with two neon bars (Pause isn't in the core icon set). */
-@Composable
-private fun PauseButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .size(44.dp)
-            .clip(Radius.pill)
-            .background(Color(0xB30D0F22))
-            .androidxBorder()
-            .pointerInput(Unit) { detectTapGestures { onClick() } },
-        contentAlignment = Alignment.Center,
-    ) {
-        androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
-            val barW = size.width * 0.28f
-            val h = size.height
-            drawRect(NDColors.TextPrimary, topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.10f, 0f), size = androidx.compose.ui.geometry.Size(barW, h))
-            drawRect(NDColors.TextPrimary, topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.62f, 0f), size = androidx.compose.ui.geometry.Size(barW, h))
-        }
-    }
-}
-
-private fun Modifier.androidxBorder(): Modifier =
-    border(androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)), Radius.pill)
