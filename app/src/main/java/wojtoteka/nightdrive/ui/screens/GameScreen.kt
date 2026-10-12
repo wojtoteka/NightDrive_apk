@@ -92,7 +92,7 @@ fun GameScreen(vm: GameViewModel) {
     Box(Modifier.fillMaxSize()) {
         SteerSurface(vm, enabled = playing, modifier = Modifier.fillMaxSize())
 
-        Box(
+        if (!vm.hudHidden) Box(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
@@ -208,7 +208,7 @@ private fun PowerUpPanel(powerups: List<HudPowerUp>, modifier: Modifier) {
 private fun PowerUpRow(pu: HudPowerUp) {
     val s = LocalStrings.current
     val color = Color(pu.type.color)
-    Panel(Modifier.width(164.dp), edge = color) {
+    Panel(Modifier.width(196.dp), edge = color) {
         Row(
             Modifier.padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,

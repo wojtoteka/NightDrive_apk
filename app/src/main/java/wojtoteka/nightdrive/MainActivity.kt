@@ -15,6 +15,7 @@ import android.os.SystemClock
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import wojtoteka.nightdrive.engine.GamePhase
+import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
 import wojtoteka.nightdrive.ui.PadDir
 import wojtoteka.nightdrive.ui.screens.NightDriveApp
@@ -50,9 +51,18 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
-        // Debug-only screenshot staging: adb shell am start ... --ez demo true
-        if (BuildConfig.DEBUG && intent?.getBooleanExtra("demo", false) == true) {
-            viewModel.requestDemo()
+        // Debug-only screenshot staging:
+        //   adb shell am start ... --ez showcase true --es lang pl --es screen SHOP --ez demo true
+        // showcase = store-art profile + sample leaderboard, screen = Destination to open,
+        // demo = frozen gameplay scene.
+        if (BuildConfig.DEBUG) {
+            val i = intent
+            if (i?.getBooleanExtra("showcase", false) == true) viewModel.requestShowcase(i.getStringExtra("lang"))
+            i?.getStringExtra("screen")?.let { name ->
+                Destination.entries.firstOrNull { it.name == name }?.let { viewModel.goTo(it) }
+            }
+            if (i?.getBooleanExtra("demo", false) == true) viewModel.requestDemo()
+            if (i?.getBooleanExtra("nohud", false) == true) viewModel.hideHud()
         }
 
         setContent { NightDriveApp(viewModel) }
