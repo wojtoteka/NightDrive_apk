@@ -73,7 +73,6 @@ object GameConfig {
     const val SPEED_MULT_MAX = 2.5f
 
     // --- Revive (rewarded-ad continue) ---
-    const val REVIVE_GRACE_MS = 2500L    // post-revive invulnerability window
 
     // --- Daily ---
     const val DAILY_REWARD = 25

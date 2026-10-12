@@ -51,7 +51,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import wojtoteka.nightdrive.ads.AdsController
 import wojtoteka.nightdrive.engine.GamePhase
 import wojtoteka.nightdrive.net.SubmitState
 import wojtoteka.nightdrive.ui.Destination
@@ -71,13 +70,13 @@ import wojtoteka.nightdrive.ui.theme.Radius
 import kotlin.math.min
 
 @Composable
-fun GameScreen(vm: GameViewModel, ads: AdsController) {
+fun GameScreen(vm: GameViewModel) {
     val hud = vm.hud
     val playing = hud.phase == GamePhase.PLAYING && !hud.paused
 
     BackHandler {
         when {
-            hud.phase == GamePhase.GAME_OVER -> ads.maybeShowInterstitial { vm.quitToMenu() }
+            hud.phase == GamePhase.GAME_OVER -> vm.quitToMenu()
             hud.paused -> vm.togglePause()
             hud.phase == GamePhase.PLAYING -> vm.togglePause()
             else -> vm.quitToMenu()
@@ -105,8 +104,8 @@ fun GameScreen(vm: GameViewModel, ads: AdsController) {
 
         PowerUpToastView(vm, Modifier.align(Alignment.Center))
 
-        if (hud.paused) PauseOverlay(vm, ads)
-        if (hud.phase == GamePhase.GAME_OVER) GameOverOverlay(vm, ads)
+        if (hud.paused) PauseOverlay(vm)
+        if (hud.phase == GamePhase.GAME_OVER) GameOverOverlay(vm)
     }
 }
 
@@ -261,7 +260,7 @@ private fun PowerUpToastView(vm: GameViewModel, modifier: Modifier) {
 }
 
 @Composable
-private fun PauseOverlay(vm: GameViewModel, ads: AdsController) {
+private fun PauseOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
     Box(
         Modifier.fillMaxSize().background(Color(0xCC05060F)),
@@ -274,7 +273,7 @@ private fun PauseOverlay(vm: GameViewModel, ads: AdsController) {
                 NeonButton(s["resume"], { vm.togglePause() }, color = NDColors.Green, icon = Icons.Filled.PlayArrow)
                 NeonButton(
                     s["quit_to_menu"],
-                    { ads.maybeShowInterstitial { vm.quitToMenu() } },
+                    { vm.quitToMenu() },
                     color = NDColors.Magenta,
                     icon = Icons.Filled.Close,
                 )
@@ -284,7 +283,7 @@ private fun PauseOverlay(vm: GameViewModel, ads: AdsController) {
 }
 
 @Composable
-private fun GameOverOverlay(vm: GameViewModel, ads: AdsController) {
+private fun GameOverOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
     val hud = vm.hud
     val isRecord = hud.score > 0 && hud.score >= hud.highScore
@@ -313,77 +312,16 @@ private fun GameOverOverlay(vm: GameViewModel, ads: AdsController) {
                 if (isRecord) {
                     Text("★ ${s["new_record"]} ★", style = NDType.Heading, color = NDColors.Gold, textAlign = TextAlign.Center)
                 }
-                AdOfferSection(vm, ads)
                 LeaderboardEntrySection(vm)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    NeonButton(s["play_again"], { ads.maybeShowInterstitial { vm.restartGame() } }, color = NDColors.Green, icon = Icons.Filled.Refresh)
-                    NeonButton(s["main_menu"], { ads.maybeShowInterstitial { vm.quitToMenu() } }, color = NDColors.TextSecondary, icon = Icons.Filled.Close)
-                    // Also gated by the interstitial: leaderboard-then-back used to be a free
-                    // detour to the menu that dodged the ad every other exit path shows.
-                    NeonButton(s["leaderboard"], { ads.maybeShowInterstitial { vm.goTo(Destination.LEADERBOARD) } }, color = NDColors.Cyan, icon = Icons.AutoMirrored.Filled.List)
+                    NeonButton(s["play_again"], { vm.restartGame() }, color = NDColors.Green, icon = Icons.Filled.Refresh)
+                    NeonButton(s["main_menu"], { vm.quitToMenu() }, color = NDColors.TextSecondary, icon = Icons.Filled.Close)
+                    NeonButton(s["leaderboard"], { vm.goTo(Destination.LEADERBOARD) }, color = NDColors.Cyan, icon = Icons.AutoMirrored.Filled.List)
                 }
             }
-        }
-    }
-}
-
-/**
- * Both rewarded-ad offers on game over, side by side so neither pushes the other off screen:
- * "double coins" on the left, "keep driving" (revive) on the right, with the revive hint below.
- */
-@Composable
-private fun AdOfferSection(vm: GameViewModel, ads: AdsController) {
-    val s = LocalStrings.current
-    // A submitted (or in-flight) score already consumed this run's anti-cheat session - the
-    // continued run couldn't be submitted again, so don't offer a continue that would mislead.
-    val reviveVisible = !vm.adReviveUsed && ads.rewardedReady &&
-        vm.submitState !is SubmitState.Done && vm.submitState !is SubmitState.Submitting
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AdRewardSection(vm, ads)
-            if (reviveVisible) {
-                NeonButton(
-                    text = s["revive"],
-                    onClick = { ads.showRewarded { vm.grantAdRevive() } },
-                    color = NDColors.Green,
-                    icon = Icons.Filled.PlayArrow,
-                )
-            }
-        }
-        if (reviveVisible) {
-            Spacer(Modifier.height(4.dp))
-            Text(s["revive_hint"], style = NDType.Caption, color = NDColors.TextMuted, textAlign = TextAlign.Center)
-        }
-    }
-}
-
-/** Rewarded ad on game over: double the coins collected this run (once per run). */
-@Composable
-private fun AdRewardSection(vm: GameViewModel, ads: AdsController) {
-    val s = LocalStrings.current
-    val coins = vm.hud.coinsInSession
-    if (coins <= 0) return
-    when {
-        vm.adRewardClaimed -> {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CoinIcon(16)
-                Spacer(Modifier.width(6.dp))
-                Text("+$coins ✓", style = NDType.Heading, color = NDColors.Gold)
-            }
-        }
-        ads.rewardedReady -> {
-            NeonButton(
-                "${s["double_coins"]}  +$coins",
-                { ads.showRewarded { vm.grantAdCoinDouble() } },
-                color = NDColors.Gold,
-                icon = Icons.Filled.PlayArrow,
-            )
         }
     }
 }

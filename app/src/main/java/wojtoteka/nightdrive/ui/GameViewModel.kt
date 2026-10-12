@@ -60,9 +60,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var scoreQualifies by mutableStateOf(false); private set
     var submitState by mutableStateOf<SubmitState>(SubmitState.Idle); private set
 
-    // Rewarded ads: "double your coins" and "continue driving" are each claimable once per run.
-    var adRewardClaimed by mutableStateOf(false); private set
-    var adReviveUsed by mutableStateOf(false); private set
     val lastNickname: String get() = profile.playerName
     private var sessionId: String? = null
     private var gameOverScore = 0
@@ -245,8 +242,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startGame() {
         clearInput()
-        adRewardClaimed = false
-        adReviveUsed = false
         engine.startRun(System.currentTimeMillis())
         destination = Destination.GAME
         if (profile.musicEnabled) audio.resumeMusic()
@@ -255,37 +250,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun restartGame() {
         clearInput()
-        adRewardClaimed = false
-        adReviveUsed = false
         engine.startRun(System.currentTimeMillis())
         beginLeaderboardRun()
-    }
-
-    /** Rewarded-ad bonus: banks this run's coins a second time ("double coins"). */
-    fun grantAdCoinDouble() {
-        if (adRewardClaimed) return
-        val bonus = engine.coinsInSession
-        if (bonus <= 0) return
-        adRewardClaimed = true
-        profile.totalCoins += bonus
-        profile.lifetimeCoins += bonus
-        audio.play(Sfx.COIN)
-        haptics.success()
-        persist()
-        refreshProfileState()
-    }
-
-    /** Rewarded-ad continue: resumes the crashed run in place (once per run). */
-    fun grantAdRevive() {
-        if (adReviveUsed || engine.phase != GamePhase.GAME_OVER) return
-        adReviveUsed = true
-        // Clear any stale game-over leaderboard UI; the next crash re-evaluates from scratch.
-        scoreQualifies = false
-        if (submitState !is SubmitState.Done) submitState = SubmitState.Idle
-        engine.revive()
-        audio.play(Sfx.POINT)
-        haptics.success()
-        if (profile.musicEnabled) audio.resumeMusic()
     }
 
     private var runToken = 0
@@ -458,18 +424,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         persist(); refreshProfileState()
         audio.play(Sfx.COIN, 0.7f); haptics.success()
         return true
-    }
-
-    /**
-     * Rewarded ad -> one shield charge. No cooldown, no daily cap: watch the ad, get a charge,
-     * repeat - the only ceiling is [PlayerProfile.shieldMax], the same one every other shield source
-     * respects, plus the natural gate of a new ad having to load before it can be shown again.
-     */
-    fun grantAdShield() {
-        if (profile.shieldCharges >= profile.shieldMax) return
-        profile.shieldCharges += 1
-        persist(); refreshProfileState()
-        audio.play(Sfx.COIN); haptics.success()
     }
 
     /** Buys one stock of a starter boost; consumed automatically at the start of the next run. */

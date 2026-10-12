@@ -59,7 +59,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import wojtoteka.nightdrive.ads.AdsController
 import wojtoteka.nightdrive.domain.Boost
 import wojtoteka.nightdrive.domain.BoostDurationUpgrade
 import wojtoteka.nightdrive.domain.Boosts
@@ -87,7 +86,7 @@ import wojtoteka.nightdrive.ui.theme.NDType
 import wojtoteka.nightdrive.ui.theme.Radius
 
 @Composable
-fun ShopScreen(vm: GameViewModel, ads: AdsController) {
+fun ShopScreen(vm: GameViewModel) {
     val s = LocalStrings.current
     val p = vm.profileState
     BackHandler { vm.goTo(Destination.MENU) }
@@ -162,7 +161,7 @@ fun ShopScreen(vm: GameViewModel, ads: AdsController) {
                 Column {
                     SectionLabel(s["pw_shield"])
                     Spacer(Modifier.height(10.dp))
-                    ShieldSection(p, ads, vm)
+                    ShieldSection(p, vm)
                     Spacer(Modifier.height(12.dp))
                     ShieldCapacityCard(p, vm)
                 }
@@ -262,7 +261,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun ShieldSection(p: ProfileSnapshot, ads: AdsController, vm: GameViewModel) {
+private fun ShieldSection(p: ProfileSnapshot, vm: GameViewModel) {
     val s = LocalStrings.current
     val maxed = p.shieldCharges >= p.shieldMax
     val affordable = p.totalCoins >= SHIELD_PRICE
@@ -287,24 +286,13 @@ private fun ShieldSection(p: ProfileSnapshot, ads: AdsController, vm: GameViewMo
             }
             if (!maxed) {
                 Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    NeonButton(
-                        text = "${s["buy"]} · $SHIELD_PRICE",
-                        onClick = { vm.buyShieldCharge() },
-                        color = NDColors.Gold,
-                        enabled = affordable,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (ads.rewardedReady) {
-                        NeonButton(
-                            text = s["watch_ad"],
-                            onClick = { ads.showRewarded { vm.grantAdShield() } },
-                            color = NDColors.Cyan,
-                            icon = Icons.Filled.PlayArrow,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
+                NeonButton(
+                    text = "${s["buy"]} · $SHIELD_PRICE",
+                    onClick = { vm.buyShieldCharge() },
+                    color = NDColors.Gold,
+                    enabled = affordable,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

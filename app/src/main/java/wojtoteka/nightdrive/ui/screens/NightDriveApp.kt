@@ -36,7 +36,7 @@ import androidx.compose.runtime.remember
 
 /** Root composable: the animated world with the current screen layered on top. */
 @Composable
-fun NightDriveApp(vm: GameViewModel, ads: wojtoteka.nightdrive.ads.AdsController) {
+fun NightDriveApp(vm: GameViewModel) {
     NightDriveTheme(language = vm.language) {
         // Drive the fixed-timestep simulation from the Compose frame clock.
         LaunchedEffect(Unit) {
@@ -58,10 +58,10 @@ fun NightDriveApp(vm: GameViewModel, ads: wojtoteka.nightdrive.ads.AdsController
                 Crossfade(targetState = vm.destination, animationSpec = tween(280), label = "nav") { dest ->
                     when (dest) {
                         Destination.MENU -> MenuScreen(vm)
-                        Destination.GAME -> GameScreen(vm, ads)
-                        Destination.SHOP -> ShopScreen(vm, ads)
+                        Destination.GAME -> GameScreen(vm)
+                        Destination.SHOP -> ShopScreen(vm)
                         Destination.ACHIEVEMENTS -> AchievementsScreen(vm)
-                        Destination.SETTINGS -> SettingsScreen(vm, ads)
+                        Destination.SETTINGS -> SettingsScreen(vm)
                         Destination.LEADERBOARD -> LeaderboardScreen(vm)
                     }
                 }

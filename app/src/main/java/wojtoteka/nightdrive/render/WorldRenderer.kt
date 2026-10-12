@@ -193,8 +193,6 @@ class WorldRenderer(private val coinFont: FontFamily, private val symbolFont: Fo
 
     private fun drawPlayer(rc: RetroCanvas, engine: GameEngine, animMs: Float) {
         if (engine.phase == GamePhase.GAME_OVER) return
-        // Classic arcade blink while the post-revive grace window is active.
-        if (engine.invulnerable && (animMs / 130f).toInt() % 2 == 0) return
         val skin = skinFor(engine.profile.selectedSkin)
         drawCar(rc, engine.player.x, engine.player.y, engine.player.bounce, skin.bodyColor, skin.accentColor)
     }

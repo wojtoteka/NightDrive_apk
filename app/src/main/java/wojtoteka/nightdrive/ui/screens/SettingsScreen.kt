@@ -47,7 +47,7 @@ import wojtoteka.nightdrive.ui.theme.NDType
 import wojtoteka.nightdrive.ui.theme.Radius
 
 @Composable
-fun SettingsScreen(vm: GameViewModel, ads: wojtoteka.nightdrive.ads.AdsController) {
+fun SettingsScreen(vm: GameViewModel) {
     val s = LocalStrings.current
     val p = vm.profileState
     var showReset by remember { mutableStateOf(false) }
@@ -87,11 +87,6 @@ fun SettingsScreen(vm: GameViewModel, ads: wojtoteka.nightdrive.ads.AdsControlle
                     selectedIndex = langs.indexOf(p.language).coerceAtLeast(0),
                     onSelect = { vm.changeLanguage(langs[it]) },
                 )
-            }
-            if (ads.privacyOptionsRequired) {
-                SettingRow(s["ad_privacy"], s["ad_privacy_desc"]) {
-                    GhostButton(s["ad_privacy"], { ads.showPrivacyOptions() }, color = NDColors.TextSecondary)
-                }
             }
             SettingRow(s["reset_progress"], s["reset_progress_desc"]) {
                 GhostButton(s["reset_progress"], { showReset = true }, color = NDColors.Red, icon = Icons.Filled.Refresh)
