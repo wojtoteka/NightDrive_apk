@@ -31,8 +31,8 @@ Do tego 21 osiągnięć z nagrodami w monetach.
 spreparowane zgłoszenia. Klucz i sekret nie leżą w kodzie - build wciąga je z `local.properties`.
 Bez internetu gra działa w całości offline.
 
-**Reklamy.** AdMob: interstitial po przegranej i rewarded do podwojenia monet, z Google UMP
-do zgody na przetwarzanie danych.
+**Bez reklam.** Żadnego SDK reklamowego, żadnych zgód UMP - gra nie wysyła nic poza wynikami
+do rankingu.
 
 **Reszta.** Dwa języki (PL/EN, domyślnie za systemem), haptyka przy monetach i kraksach,
 DataStore na profil gracza, baseline profile żeby ART skompilował ścieżkę startu z wyprzedzeniem
@@ -49,7 +49,6 @@ ui/        ekrany (menu, gra, sklep, osiągnięcia, ranking, ustawienia) + ViewM
 domain/    katalog skinów, power-upów i osiągnięć, profil gracza, tłumaczenia
 data/      zapis stanu (DataStore)
 net/       klient API rankingu, podpisywanie HMAC
-ads/       AdMob + zgoda UMP
 audio/     muzyka i efekty
 ```
 

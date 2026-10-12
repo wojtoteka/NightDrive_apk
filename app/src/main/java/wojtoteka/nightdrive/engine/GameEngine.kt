@@ -41,7 +41,6 @@ class GameEngine(
     val powerups = ArrayList<PowerUp>(4)
     val stars = ArrayList<Star>(32)
     val particles = ArrayList<Particle>(64)
-    val toasts = ArrayList<PowerUpToast>(6)
 
     // Run scalars
     var score = 0; private set
@@ -75,7 +74,6 @@ class GameEngine(
     private var powerupSpawnDelay = 0f
     private var bounce = 0f
     private var newHighAnnounced = false
-    private var invulnerableUntil = 0L   // post-revive grace window (virtual clock)
     // Coin-earning starter boosts (magnet/double/coin rush) arm at run start but fire on the FIRST
     // collected coin - the opening seconds have no coins, so firing immediately would waste them.
     // The slow-motion starter is defensive, not coin-driven: it activates right at run start.
@@ -97,8 +95,6 @@ class GameEngine(
 
     val survivalSeconds: Int get() = ((clockMs - streakStartMs) / 1000L).toInt().coerceAtLeast(0)
     val comboMultiplier: Float get() = C.comboMultiplier(streak)
-    /** True during the short post-revive grace window (renderer blinks the car). */
-    val invulnerable: Boolean get() = phase == GamePhase.PLAYING && clockMs < invulnerableUntil
     fun nowMs(): Long = clockMs
 
     init { buildStars() }
@@ -115,7 +111,7 @@ class GameEngine(
     fun enterMenu(realNowMs: Long) {
         phase = GamePhase.MENU
         paused = false
-        enemies.clear(); coins.clear(); powerups.clear(); particles.clear(); toasts.clear()
+        enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         player.x = -halfWidth - C.PLAYER_START_X_MARGIN
         player.y = C.PLAYER_START_Y
         refreshDaily(realNowMs)
@@ -123,12 +119,11 @@ class GameEngine(
 
     fun startRun(realNowMs: Long) {
         refreshDaily(realNowMs)
-        enemies.clear(); coins.clear(); powerups.clear(); particles.clear(); toasts.clear()
+        enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         score = 0; coinsInSession = 0; streak = 0; globalTime = 0f; difficulty = 0
         magnetActive = false; slowmoActive = false; doubleActive = false; coinRushActive = false
         newHighAnnounced = false
         clockMs = 0L; clockFrac = 0f; enemyTimer = 0L; coinTimer = 0L; powerupTimer = 0L; lastCoinMs = 0L
-        invulnerableUntil = 0L
         enemySpawnDelay = C.ENEMY_START_DELAY_MS
         coinSpawnDelay = 0f
         powerupSpawnDelay = rng.intInRange(C.POWERUP_SPAWN_MIN_MS, C.POWERUP_SPAWN_MAX_MS).toFloat()
@@ -152,22 +147,6 @@ class GameEngine(
         if (profile.pendingMagnetStarts > 0) { profile.pendingMagnetStarts--; profile.lifetimeBoostsUsed++; applyTimed(PowerUpType.MAGNET, starterDuration(PowerUpType.MAGNET)) }
         if (profile.pendingDoubleStarts > 0) { profile.pendingDoubleStarts--; profile.lifetimeBoostsUsed++; applyTimed(PowerUpType.DOUBLE, starterDuration(PowerUpType.DOUBLE)) }
         if (profile.pendingCoinRushStarts > 0) { profile.pendingCoinRushStarts--; profile.lifetimeBoostsUsed++; applyTimed(PowerUpType.COIN_RUSH, starterDuration(PowerUpType.COIN_RUSH)) }
-    }
-
-    /**
-     * Rewarded-ad continue: brings the crashed run back to life exactly where it ended. Score,
-     * coins and survival clock carry on; the combo was already reset by the crash. All traffic is
-     * cleared and a short invulnerability window keeps the respawn from being an instant re-kill.
-     */
-    fun revive() {
-        if (phase != GamePhase.GAME_OVER) return
-        enemies.clear()
-        gameOverSlide = 0f
-        invulnerableUntil = clockMs + C.REVIVE_GRACE_MS
-        enemyTimer = clockMs
-        enemySpawnDelay = max(C.ENEMY_START_DELAY_MS, enemySpawnDelay)
-        paused = false
-        phase = GamePhase.PLAYING
     }
 
     fun togglePause() {
@@ -224,7 +203,6 @@ class GameEngine(
         maybeSpawnCoin()
         updatePowerups()
         maybeSpawnPowerup()
-        updateToasts()
 
         difficulty = (score / 20)
 
@@ -275,11 +253,6 @@ class GameEngine(
             e.x -= (e.speed + globalTime / 55f) * factor
             if (e.x <= despawnX) { enemies.removeAt(i); continue }
             if (enemyHitsPlayer(e)) {
-                if (clockMs < invulnerableUntil) {
-                    // Post-revive grace: traffic passes straight through the blinking player.
-                    i++
-                    continue
-                }
                 if (profile.shieldCharges > 0) {
                     profile.shieldCharges -= 1
                     profile.lifetimeShieldBlocks += 1
@@ -468,7 +441,6 @@ class GameEngine(
                 coinRushActive = true
             }
         }
-        toasts += PowerUpToast(type, clockMs)
     }
 
     private fun updatePowerupTimers() {
@@ -555,7 +527,7 @@ class GameEngine(
         player.x = -70f
         player.y = -28f
         player.z = player.y / 30f
-        enemies.clear(); coins.clear(); powerups.clear(); toasts.clear(); particles.clear()
+        enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         enemies += Enemy(78f, -44f, 1f, 0)      // red, near lane
         enemies += Enemy(150f, 0f, 1f, 205)     // blue, mid-right
         enemies += Enemy(-38f, 14f, 1f, 130)    // green, far
@@ -673,14 +645,6 @@ class GameEngine(
                 s.x = rng.nextFloat(60f, halfWidth + 80f)
                 s.y = rng.intInRange(18f, 100f).toFloat()
             }
-        }
-    }
-
-    private fun updateToasts() {
-        var i = 0
-        while (i < toasts.size) {
-            if (clockMs - toasts[i].bornAtMs > 1800L) { toasts.removeAt(i); continue }
-            i++
         }
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextMeasurer
@@ -38,6 +39,14 @@ class RenderCache {
             strokeCount++
         }
         return s
+    }
+
+    private val roundStrokes = HashMap<Float, Stroke>()
+
+    /** Stroke with round caps/joins, so polyline corners don't spike at small sizes. */
+    fun roundStroke(width: Float): Stroke {
+        if (roundStrokes.size > 32) roundStrokes.clear()
+        return roundStrokes.getOrPut(width) { Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round) }
     }
 
     private data class GradientKey(val top: Long, val bottom: Long, val startY: Float, val endY: Float)
@@ -114,6 +123,18 @@ class RetroCanvas(
             close()
         }
         ds.drawPath(path, c(color), alpha, blendMode = blend)
+    }
+
+    /** Stroked polyline through (x, y) pairs, optionally closed back to the first point. */
+    fun drawPolyline(closed: Boolean, vararg pts: Float, color: Long) {
+        if (pts.size < 4) return
+        val path = Path().apply {
+            moveTo(sx(pts[0]), sy(pts[1]))
+            var i = 2
+            while (i + 1 < pts.size) { lineTo(sx(pts[i]), sy(pts[i + 1])); i += 2 }
+            if (closed) close()
+        }
+        ds.drawPath(path, c(color), alpha, style = cache.roundStroke(lineWidth * unit), blendMode = blend)
     }
 
     /** Vertical gradient rectangle in world coords (used for sky/road bands). */

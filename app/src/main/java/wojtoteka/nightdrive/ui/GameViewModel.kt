@@ -52,7 +52,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var hud by mutableStateOf(HudState()); private set
     var profileState by mutableStateOf(ProfileSnapshot()); private set
     var achievementToastKey by mutableStateOf<String?>(null); private set
-    var powerUpToast by mutableStateOf<PowerUpType?>(null); private set
     var language by mutableStateOf(Language.SYSTEM); private set
 
     // Online leaderboard
@@ -60,9 +59,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var scoreQualifies by mutableStateOf(false); private set
     var submitState by mutableStateOf<SubmitState>(SubmitState.Idle); private set
 
-    // Rewarded ads: "double your coins" and "continue driving" are each claimable once per run.
-    var adRewardClaimed by mutableStateOf(false); private set
-    var adReviveUsed by mutableStateOf(false); private set
     val lastNickname: String get() = profile.playerName
     private var sessionId: String? = null
     private var gameOverScore = 0
@@ -74,7 +70,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private var accumulatorMs = 0f
     private var animMs = 0f
     private var toastJob: Job? = null
-    private var powerUpToastJob: Job? = null
 
     // Live input intents - slide-to-steer surface
     private var inLeft = false
@@ -92,6 +87,18 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     /** Debug-only screenshot staging, requested via launch intent before the profile loads. */
     private var demoRequested = false
 
+    /**
+     * Debug-only store-screenshot mode: a fixed, good-looking profile and a made-up leaderboard
+     * (no real players' nicknames in marketing art). Never written to disk.
+     */
+    private var showcase = false
+    private var showcaseLanguage: Language? = null
+
+    /** Debug-only: hides the in-game HUD for clean key art (feature graphic). */
+    var hudHidden by mutableStateOf(false); private set
+
+    fun hideHud() { if (wojtoteka.nightdrive.BuildConfig.DEBUG) hudHidden = true }
+
     init {
         audio.loadSfx()
         viewModelScope.launch {
@@ -103,6 +110,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             isReady = true
             if (profile.musicEnabled) audio.startMusic()
             store.save(profile) // persist any daily rollover done in enterMenu
+            if (showcase) applyShowcase()
             if (demoRequested) stageDemo()
         }
     }
@@ -112,6 +120,49 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         if (!wojtoteka.nightdrive.BuildConfig.DEBUG) return
         if (isReady) stageDemo() else demoRequested = true
     }
+
+    /** Debug builds only: see [showcase]. [lang] is "en" / "pl". */
+    fun requestShowcase(lang: String?) {
+        if (!wojtoteka.nightdrive.BuildConfig.DEBUG) return
+        showcase = true
+        showcaseLanguage = lang?.let { Language.fromCode(it) }
+        if (isReady) applyShowcase()
+    }
+
+    private fun applyShowcase() {
+        with(profile) {
+            highScore = 412
+            longestStreakTimeSec = 187
+            longestStreak = 14
+            totalCoins = 2480
+            lifetimeCoins = 3650
+            shieldCharges = 3
+            lifetimeShieldBlocks = 11
+            lifetimeBoostsUsed = 9
+            lifetimePowerups = 34
+            pendingMagnetStarts = 2
+            boostDurationLevelAll = 1
+            boostDurationLevelMagnet = 2
+            boostDurationLevelDouble = 1
+            ownedSkins = mutableSetOf("classic", "neon", "rose", "gold")
+            selectedSkin = "classic"
+            ownedThemes = mutableSetOf("sunset", "aurora")
+            selectedTheme = "sunset"
+            unlockedAchievements = mutableSetOf(
+                "coins100", "coins1000", "score50", "score100", "score250",
+                "streak5", "streak12", "survive60", "survive120", "daily7",
+            )
+            dailyType = 0; dailyGoal = 25; dailyProgress = 18; dailyCompleted = false
+            dailyStreak = 6; bestDailyStreak = 9
+        }
+        showcaseLanguage?.let { profile.language = it.code; language = it }
+        refreshProfileState()
+    }
+
+    private val showcaseBoard = listOf(
+        "NeonViper" to 812, "Lumen" to 764, "AfterDark" to 701, "Kestrel" to 655, "Wojtoteka" to 614,
+        "Moonrider" to 598, "Static" to 543, "Halcyon" to 487, "RedShift" to 431, "Overdrive" to 412,
+    ).mapIndexed { i, (n, sc) -> LeaderboardEntry(i + 1, n, sc) }
 
     private fun stageDemo() {
         profile.shieldCharges = 2   // makes the power-up HUD panel show shield charges too
@@ -148,12 +199,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         for (i in engine.events.indices) {
             when (val ev = engine.events[i]) {
                 GameEvent.CoinCollected -> { audio.play(Sfx.COIN); haptics.tick() }
-                is GameEvent.PowerUpCollected -> {
-                    audio.play(Sfx.POINT); haptics.light()
-                    powerUpToast = ev.type
-                    powerUpToastJob?.cancel()
-                    powerUpToastJob = viewModelScope.launch { delay(1400); powerUpToast = null }
-                }
+                is GameEvent.PowerUpCollected -> { audio.play(Sfx.POINT); haptics.light() }
                 GameEvent.ShieldBlocked -> { audio.play(Sfx.POINT, 0.5f); haptics.medium() }
                 GameEvent.NewHighScore -> {}
                 GameEvent.Crash -> {
@@ -245,8 +291,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startGame() {
         clearInput()
-        adRewardClaimed = false
-        adReviveUsed = false
         engine.startRun(System.currentTimeMillis())
         destination = Destination.GAME
         if (profile.musicEnabled) audio.resumeMusic()
@@ -255,37 +299,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     fun restartGame() {
         clearInput()
-        adRewardClaimed = false
-        adReviveUsed = false
         engine.startRun(System.currentTimeMillis())
         beginLeaderboardRun()
-    }
-
-    /** Rewarded-ad bonus: banks this run's coins a second time ("double coins"). */
-    fun grantAdCoinDouble() {
-        if (adRewardClaimed) return
-        val bonus = engine.coinsInSession
-        if (bonus <= 0) return
-        adRewardClaimed = true
-        profile.totalCoins += bonus
-        profile.lifetimeCoins += bonus
-        audio.play(Sfx.COIN)
-        haptics.success()
-        persist()
-        refreshProfileState()
-    }
-
-    /** Rewarded-ad continue: resumes the crashed run in place (once per run). */
-    fun grantAdRevive() {
-        if (adReviveUsed || engine.phase != GamePhase.GAME_OVER) return
-        adReviveUsed = true
-        // Clear any stale game-over leaderboard UI; the next crash re-evaluates from scratch.
-        scoreQualifies = false
-        if (submitState !is SubmitState.Done) submitState = SubmitState.Idle
-        engine.revive()
-        audio.play(Sfx.POINT)
-        haptics.success()
-        if (profile.musicEnabled) audio.resumeMusic()
     }
 
     private var runToken = 0
@@ -309,6 +324,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Leaderboard -----------------------------------------------------------------------
 
     fun fetchLeaderboard() {
+        if (showcase) { leaderboardState = LeaderboardState.Success(showcaseBoard); return }
         leaderboardState = LeaderboardState.Loading
         viewModelScope.launch {
             leaderboardState = try {
@@ -460,18 +476,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    /**
-     * Rewarded ad -> one shield charge. No cooldown, no daily cap: watch the ad, get a charge,
-     * repeat - the only ceiling is [PlayerProfile.shieldMax], the same one every other shield source
-     * respects, plus the natural gate of a new ad having to load before it can be shown again.
-     */
-    fun grantAdShield() {
-        if (profile.shieldCharges >= profile.shieldMax) return
-        profile.shieldCharges += 1
-        persist(); refreshProfileState()
-        audio.play(Sfx.COIN); haptics.success()
-    }
-
     /** Buys one stock of a starter boost; consumed automatically at the start of the next run. */
     fun buyBoost(boost: wojtoteka.nightdrive.domain.Boost): Boolean {
         if (profile.totalCoins < boost.price) {
@@ -585,7 +589,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         haptics.enabled = profile.hapticsEnabled
     }
 
-    private fun persist() { viewModelScope.launch { store.save(profile) } }
+    private fun persist() {
+        if (showcase) return
+        viewModelScope.launch { store.save(profile) }
+    }
 
     private fun refreshProfileState() {
         profileState = ProfileSnapshot(

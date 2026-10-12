@@ -68,13 +68,17 @@ object Achievements {
     )
 }
 
-/** The five power-up kinds and their tuning. Durations in milliseconds (0 = instant). */
+/**
+ * The five power-up kinds and their tuning. Durations in milliseconds (0 = instant). Each colour is
+ * the token's ring colour on the road, so they're spread around the wheel and kept clear of the
+ * coin's yellow.
+ */
 enum class PowerUpType(val id: String, val labelKey: String, val durationMs: Long, val color: Long) {
     SHIELD("shield", "pw_shield", 0L, 0xFF3BE1FF),
-    MAGNET("magnet", "pw_magnet", 8_000L, 0xFFFFB020),
-    SLOWMO("slowmo", "pw_slowmo", 5_000L, 0xFF8FA6FF),
-    DOUBLE("double", "pw_double", 10_000L, 0xFF6BFF8A),
-    COIN_RUSH("coinrush", "pw_coinrush", 12_000L, 0xFFFFD23F);
+    MAGNET("magnet", "pw_magnet", 8_000L, 0xFFFF5A4F),
+    SLOWMO("slowmo", "pw_slowmo", 5_000L, 0xFFB48CFF),
+    DOUBLE("double", "pw_double", 10_000L, 0xFF5CFF8A),
+    COIN_RUSH("coinrush", "pw_coinrush", 12_000L, 0xFFFF4FD8);
 
     companion object {
         val spawnable = entries.toList()

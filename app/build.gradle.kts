@@ -34,8 +34,8 @@ android {
         applicationId = "wojtoteka.nightdrive"
         minSdk = 24
         targetSdk = 36
-        versionCode = 22
-        versionName = "3.2"
+        versionCode = 24
+        versionName = "3.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -52,6 +52,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -106,8 +107,6 @@ dependencies {
     // the startup path instead of JIT-ing it every cold start. Compose pulls this in transitively
     // already; the explicit dependency pins the newer version and documents that we rely on it.
     implementation(libs.androidx.profileinstaller)
-    implementation(libs.play.services.ads)
-    implementation(libs.user.messaging.platform)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

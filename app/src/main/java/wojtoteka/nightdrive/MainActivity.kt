@@ -1,5 +1,6 @@
 package wojtoteka.nightdrive
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -10,15 +11,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import android.os.SystemClock
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import wojtoteka.nightdrive.ads.AdsController
 import wojtoteka.nightdrive.engine.GamePhase
+import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
 import wojtoteka.nightdrive.ui.PadDir
 import wojtoteka.nightdrive.ui.screens.NightDriveApp
@@ -30,7 +27,6 @@ import wojtoteka.nightdrive.ui.screens.NightDriveApp
 class MainActivity : ComponentActivity() {
 
     private val viewModel: GameViewModel by viewModels()
-    private lateinit var ads: AdsController
 
     // Hardware controls: arrow keys, WASD, and an Xbox/generic gamepad's D-pad or left stick all
     // drive the same on-screen pad state as a touch, so they inherit its priority-over-slide rule.
@@ -51,26 +47,25 @@ class MainActivity : ComponentActivity() {
         splash.setKeepOnScreenCondition { !viewModel.isReady }
 
         enableEdgeToEdge()
+        lockLandscapeOnPhones()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
-        // Debug-only screenshot staging: adb shell am start ... --ez demo true
-        if (BuildConfig.DEBUG && intent?.getBooleanExtra("demo", false) == true) {
-            viewModel.requestDemo()
+        // Debug-only screenshot staging:
+        //   adb shell am start ... --ez showcase true --es lang pl --es screen SHOP --ez demo true
+        // showcase = store-art profile + sample leaderboard, screen = Destination to open,
+        // demo = frozen gameplay scene.
+        if (BuildConfig.DEBUG) {
+            val i = intent
+            if (i?.getBooleanExtra("showcase", false) == true) viewModel.requestShowcase(i.getStringExtra("lang"))
+            i?.getStringExtra("screen")?.let { name ->
+                Destination.entries.firstOrNull { it.name == name }?.let { viewModel.goTo(it) }
+            }
+            if (i?.getBooleanExtra("demo", false) == true) viewModel.requestDemo()
+            if (i?.getBooleanExtra("nohud", false) == true) viewModel.hideHud()
         }
 
-        ads = AdsController(this)
-        // Ad init (UMP consent + MobileAds + WebView creation for the preloaded creatives) does
-        // heavy main-thread work and would collide with the first seconds of rendering, when the
-        // JIT is still warming the draw path up. The first interstitial can't be needed before the
-        // first game-over anyway, so start it once the launch rush is over. lifecycleScope cancels
-        // this if the activity dies first.
-        lifecycleScope.launch {
-            delay(ADS_INIT_DELAY_MS)
-            ads.start()
-        }
-
-        setContent { NightDriveApp(viewModel, ads) }
+        setContent { NightDriveApp(viewModel) }
     }
 
     override fun onResume() {
@@ -84,18 +79,24 @@ class MainActivity : ComponentActivity() {
         viewModel.onAppPause()
     }
 
-    override fun onDestroy() {
-        ads.destroy()
-        super.onDestroy()
-    }
-
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
     }
 
+    /**
+     * The game is designed for landscape, but large screens (tablets, foldables, desktop windows)
+     * must stay free to rotate and resize - Android 16 ignores orientation locks there anyway, and
+     * Play flags apps that declare them in the manifest. So the lock is only requested at runtime,
+     * and only on phone-sized screens.
+     */
+    private fun lockLandscapeOnPhones() {
+        if (resources.configuration.smallestScreenWidthDp < 600) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+    }
+
     private fun hideSystemBars() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -200,7 +201,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        const val ADS_INIT_DELAY_MS = 5_000L
         const val STICK_DEADZONE = 0.35f
         const val STICK_FOCUS_ON = 0.6f
         const val STICK_FOCUS_OFF = 0.4f
