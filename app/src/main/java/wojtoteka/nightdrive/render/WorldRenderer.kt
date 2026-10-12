@@ -1,13 +1,12 @@
 package wojtoteka.nightdrive.render
 
-import androidx.compose.ui.text.font.FontFamily
-import wojtoteka.nightdrive.domain.PowerUpType
 import wojtoteka.nightdrive.domain.Skin
 import wojtoteka.nightdrive.domain.Skins
 import wojtoteka.nightdrive.domain.WorldTheme
 import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.engine.Coin
 import wojtoteka.nightdrive.engine.Enemy
+import wojtoteka.nightdrive.engine.GameConfig
 import wojtoteka.nightdrive.engine.GameEngine
 import wojtoteka.nightdrive.engine.GamePhase
 import wojtoteka.nightdrive.engine.PowerUp
@@ -17,10 +16,10 @@ import kotlin.math.sqrt
 
 /**
  * Draws the synthwave world (sky, sun, road grid, stars, cars, coins, power-ups, particles) using
- * [RetroCanvas]. The car/coin/power-up geometry is a faithful port of the original vector drawing;
+ * [RetroCanvas]. The car and coin geometry is a faithful port of the original vector drawing;
  * the sun, glows and particles are new polish that don't touch gameplay.
  */
-class WorldRenderer(private val coinFont: FontFamily, private val symbolFont: FontFamily) {
+class WorldRenderer {
 
     fun render(rc: RetroCanvas, engine: GameEngine, animMs: Float) {
         val theme = themeFor(engine.profile.selectedTheme)
@@ -229,85 +228,41 @@ class WorldRenderer(private val coinFont: FontFamily, private val symbolFont: Fo
         rc.drawLine(x - 5f * size1 / 2f, y - 3f * size1 / 2f, x2 - 5f * size2 / 2f, y2 - 3f * size2 / 2f, farColor)
     }
 
-    // ---- Coins -----------------------------------------------------------------------------
+    // ---- Coins & power-ups -----------------------------------------------------------------
 
     private fun drawCoin(rc: RetroCanvas, c: Coin, animMs: Float) {
         rc.reset()
         // Depth-scaled with the same formula as the pickup hitbox in GameEngine (10 - y/9), so a
-        // coin near the horizon is small next to distant cars and grows as it approaches - the
-        // visual matches where the game actually considers the coin to be.
+        // coin near the horizon is small next to distant cars and grows as it approaches.
         val base = 10f - c.y / 9f
-        val size = if (c.popping) base * (1f + (1f - c.pop) * 1.2f) else base
-        val a = if (c.popping) c.pop.coerceIn(0f, 1f) else 1f
-        val gold = 0xFFFFCF34
-        val goldHi = 0xFFFFE896
-        val goldEdge = 0xFF7A5200
-        val d = 1.35f * size
-        // Spin: squash the disc's width like a coin rotating around its vertical axis.
-        val spin = kotlin.math.abs(sin(animMs / 180f + c.x * 0.03f))
-        val w = d * (0.22f + 0.78f * spin)
-        // small soft shadow on the road
-        rc.alpha = 0.16f * a
-        rc.fillRound(c.x, c.y - size * 0.9f, 1.2f * size, 0.36f * size, 0xFF000000)
-        // gold disc + lighter inner face + "$" once the face is turned far enough toward us
-        rc.alpha = a
-        rc.fillRound(c.x, c.y, w, d, gold)
-        rc.fillRound(c.x, c.y, w * 0.66f, d * 0.66f, goldHi)
-        if (spin > 0.45f) rc.drawText("$", c.x, c.y, size / 1.7f, goldEdge, symbolFont)
+        if (!c.popping) {
+            drawTokenShadow(rc, c.x, c.y, base)
+            rc.alpha = TOKEN_ALPHA
+            TokenArt.drawCoin(rc, c.x, c.y, base, TokenArt.spinAt(animMs), TOKEN_LINE)
+        } else {
+            // Original pop-out: each tick the coin grows by 2n while n (= pop) fades 1 -> 0, so the
+            // growth is the running sum of 2n over the ticks elapsed so far.
+            val k = (1f - c.pop) / GameConfig.COIN_POP_STEP
+            val grown = base + 2f * (k - GameConfig.COIN_POP_STEP * k * (k + 1f) / 2f)
+            rc.alpha = c.pop.coerceIn(0f, 1f)
+            TokenArt.drawCoin(rc, c.x, c.y, grown, TokenArt.spinAt(animMs), TOKEN_LINE)
+        }
         rc.reset()
     }
-
-    // ---- Power-ups -------------------------------------------------------------------------
 
     private fun drawPowerUp(rc: RetroCanvas, p: PowerUp, animMs: Float) {
         rc.reset()
-        // Depth-scaled with the same formula as the coins, so the whole road reads with one
-        // consistent perspective.
         val size = 10f - p.y / 9f
-        val col = p.type.color
-        val pulse = 1f + 0.05f * sin(animMs / 240f)
-        val r = 1.5f * size * pulse
-        // small soft shadow on the road
-        rc.alpha = 0.16f
-        rc.fillRound(p.x, p.y - size * 0.9f, 1.3f * size, 0.38f * size, 0xFF000000)
-        // amulet body (filled gem) with an inner sheen and a bright rim
-        rc.alpha = 0.95f
-        rc.fillRound(p.x, p.y, r, r, col)
-        rc.alpha = 0.25f
-        rc.fillRound(p.x, p.y, r * 0.72f, r * 0.72f, 0xFFFFFFFF)
-        rc.alpha = 1f
-        rc.lineWidth = 1f
-        rc.drawRound(p.x, p.y, r * 1.1f, r * 1.1f, 0xFFFFFFFF)
-        // white symbol on top so each power-up is instantly recognisable
-        drawPowerUpSymbol(rc, p.type, p.x, p.y, size * 0.4f, 0xFFFFFFFF)
+        drawTokenShadow(rc, p.x, p.y, size)
+        rc.alpha = TOKEN_ALPHA
+        TokenArt.drawPowerUp(rc, p.type, p.x, p.y, size, TokenArt.spinAt(animMs), TOKEN_LINE)
         rc.reset()
     }
 
-    fun drawPowerUpSymbol(rc: RetroCanvas, type: PowerUpType, x: Float, y: Float, s: Float, col: Long) {
-        rc.alpha = 1f
-        when (type) {
-            PowerUpType.SHIELD ->
-                rc.fillPolygon(
-                    x - 1.4f * s, y + 1.2f * s, x + 1.4f * s, y + 1.2f * s,
-                    x + 1.4f * s, y - 0.1f * s, x, y - 1.6f * s, x - 1.4f * s, y - 0.1f * s,
-                    color = col,
-                )
-            PowerUpType.MAGNET -> {
-                rc.fillRect(x - 0.9f * s, y + 0.35f * s, 0.9f * s, 1.9f * s, col)
-                rc.fillRect(x + 0.9f * s, y + 0.35f * s, 0.9f * s, 1.9f * s, col)
-                rc.fillRect(x, y - 0.85f * s, 2.7f * s, 0.9f * s, col)
-                rc.fillRect(x - 0.9f * s, y + 1.05f * s, 0.9f * s, 0.5f * s, 0xFFFFFFFF)
-                rc.fillRect(x + 0.9f * s, y + 1.05f * s, 0.9f * s, 0.5f * s, 0xFFFFFFFF)
-            }
-            PowerUpType.SLOWMO -> {
-                rc.lineWidth = 1.2f
-                rc.drawRound(x, y, 3f * s, 3f * s, col)
-                rc.drawLine(x, y, x, y + 1.1f * s, col)
-                rc.drawLine(x, y, x + 0.8f * s, y - 0.2f * s, col)
-            }
-            PowerUpType.DOUBLE -> rc.drawText("x2", x, y, 2.6f * s, col, symbolFont)
-            PowerUpType.COIN_RUSH -> rc.drawText("\$x2", x, y, 2.0f * s, col, symbolFont)
-        }
+    /** Soft contact shadow on the road, exactly as the original coin had it. */
+    private fun drawTokenShadow(rc: RetroCanvas, x: Float, y: Float, size: Float) {
+        rc.alpha = 0.2f
+        rc.fillRound(x, y - size, 1.5f * size, 0.5f * size, 0xFF000000)
     }
 
     // ---- Particles -------------------------------------------------------------------------
@@ -337,5 +292,7 @@ class WorldRenderer(private val coinFont: FontFamily, private val symbolFont: Fo
         const val SUN_R = 44f
         const val SUN_BANDS = 24
         const val SUN_SLATS = 5
+        const val TOKEN_ALPHA = 0.8f
+        const val TOKEN_LINE = 0.8f
     }
 }

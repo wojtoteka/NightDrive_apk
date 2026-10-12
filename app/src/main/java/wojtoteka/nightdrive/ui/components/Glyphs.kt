@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,24 +24,38 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
+import wojtoteka.nightdrive.render.RenderCache
+import wojtoteka.nightdrive.render.RetroCanvas
+import wojtoteka.nightdrive.render.TokenArt
 import wojtoteka.nightdrive.ui.theme.NDColors
 import wojtoteka.nightdrive.ui.theme.NDFonts
 import wojtoteka.nightdrive.ui.theme.Radius
 
-/** A small gold coin token with a "$". */
+/**
+ * Draws a road token (see [TokenArt]) into a small square icon: a [RetroCanvas] over the Canvas
+ * gives the same ±100-unit world the road uses, so the icon is literally the in-game drawing,
+ * frozen mid-spin. Stroke is held at ~1.4dp so small icons don't go hairline-thin.
+ */
 @Composable
-fun CoinIcon(size: Int = 18, modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .size(size.dp)
-            .clip(CircleShape)
-            .background(Brush.verticalGradient(listOf(NDColors.Gold, Color(0xFFE0A21A))))
-            .border(BorderStroke(1.dp, Color(0xFFFFF0B8)), CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("$", fontFamily = NDFonts.Ui, fontSize = (size * 0.62f).sp, color = Color(0xFF5A3B00))
+private fun TokenIcon(size: Int, modifier: Modifier, draw: (RetroCanvas, Float) -> Unit) {
+    val measurer = rememberTextMeasurer(cacheSize = 4)
+    val cache = remember { RenderCache() }
+    Canvas(modifier.size(size.dp)) {
+        val rc = RetroCanvas(this, measurer, NDFonts.Brand, cache)
+        val line = maxOf(11f, 1.4.dp.toPx() / rc.unit)
+        draw(rc, line)
     }
 }
+
+/** The coin, as on the road: yellow gyroscope rings around a "$". */
+@Composable
+fun CoinIcon(size: Int = 18, modifier: Modifier = Modifier) {
+    TokenIcon(size, modifier) { rc, line ->
+        TokenArt.drawCoin(rc, 0f, 0f, TOKEN_ICON_SIZE, TokenArt.ICON_SPIN, line)
+    }
+}
+
+private const val TOKEN_ICON_SIZE = 122f
 
 /** Coin balance pill: coin token + count. */
 @Composable
@@ -80,41 +96,10 @@ fun ShieldIcon(size: Int = 16, color: Color = NDColors.Cyan, modifier: Modifier 
     }
 }
 
-/** Compact power-up symbol for the in-game HUD panel and pickup toast. */
+/** A power-up token, as on the road: its coloured rings around its badge. */
 @Composable
 fun PowerUpGlyph(type: wojtoteka.nightdrive.domain.PowerUpType, size: Int = 18, modifier: Modifier = Modifier) {
-    val color = Color(type.color)
-    when (type) {
-        wojtoteka.nightdrive.domain.PowerUpType.DOUBLE ->
-            Box(modifier.size(size.dp), contentAlignment = Alignment.Center) {
-                Text("×2", fontFamily = NDFonts.Display, fontSize = (size * 0.72f).sp, color = color)
-            }
-        wojtoteka.nightdrive.domain.PowerUpType.COIN_RUSH ->
-            Box(modifier.size(size.dp), contentAlignment = Alignment.Center) {
-                Text("$×2", fontFamily = NDFonts.Display, fontSize = (size * 0.58f).sp, color = color)
-            }
-        wojtoteka.nightdrive.domain.PowerUpType.SHIELD -> ShieldIcon(size, color, modifier)
-        else -> Canvas(modifier.size(size.dp)) {
-            val w = this.size.width; val h = this.size.height
-            when (type) {
-                wojtoteka.nightdrive.domain.PowerUpType.MAGNET -> {
-                    // U-shaped magnet
-                    drawArc(color, 180f, 180f, useCenter = false,
-                        topLeft = Offset(w * 0.18f, h * 0.16f),
-                        size = androidx.compose.ui.geometry.Size(w * 0.64f, h * 0.64f),
-                        style = Stroke(width = w * 0.22f))
-                    drawRect(color, Offset(w * 0.18f, h * 0.48f), androidx.compose.ui.geometry.Size(w * 0.22f, h * 0.28f))
-                    drawRect(color, Offset(w * 0.60f, h * 0.48f), androidx.compose.ui.geometry.Size(w * 0.22f, h * 0.28f))
-                    drawRect(Color.White, Offset(w * 0.18f, h * 0.70f), androidx.compose.ui.geometry.Size(w * 0.22f, h * 0.12f))
-                    drawRect(Color.White, Offset(w * 0.60f, h * 0.70f), androidx.compose.ui.geometry.Size(w * 0.22f, h * 0.12f))
-                }
-                wojtoteka.nightdrive.domain.PowerUpType.SLOWMO -> {
-                    drawCircle(color, radius = w * 0.42f, style = Stroke(width = w * 0.11f))
-                    drawLine(color, Offset(w * 0.5f, h * 0.5f), Offset(w * 0.5f, h * 0.22f), strokeWidth = w * 0.1f)
-                    drawLine(color, Offset(w * 0.5f, h * 0.5f), Offset(w * 0.7f, h * 0.56f), strokeWidth = w * 0.1f)
-                }
-                else -> {}
-            }
-        }
+    TokenIcon(size, modifier) { rc, line ->
+        TokenArt.drawPowerUp(rc, type, 0f, 0f, TOKEN_ICON_SIZE, TokenArt.ICON_SPIN, line)
     }
 }

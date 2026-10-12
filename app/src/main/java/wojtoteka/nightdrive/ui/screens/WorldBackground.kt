@@ -23,7 +23,7 @@ fun WorldBackground(vm: GameViewModel, modifier: Modifier = Modifier) {
     // Deep layout cache: coin/power-up glyphs re-measure at many quantized sizes every frame,
     // and the default cache of 8 would thrash straight through them.
     val textMeasurer = rememberTextMeasurer(cacheSize = 160)
-    val renderer = remember { WorldRenderer(NDFonts.Ui, NDFonts.Ui) }
+    val renderer = remember { WorldRenderer() }
     val renderCache = remember { RenderCache() }
     Canvas(
         modifier = modifier.onSizeChanged { size ->
@@ -35,7 +35,7 @@ fun WorldBackground(vm: GameViewModel, modifier: Modifier = Modifier) {
     ) {
         // Subscribe the draw pass to the frame clock.
         @Suppress("UNUSED_EXPRESSION") vm.frameTick.intValue
-        val rc = RetroCanvas(this, textMeasurer, NDFonts.Ui, renderCache)
+        val rc = RetroCanvas(this, textMeasurer, NDFonts.Brand, renderCache)
         renderer.render(rc, vm.engine, vm.worldAnimMs)
     }
 }
