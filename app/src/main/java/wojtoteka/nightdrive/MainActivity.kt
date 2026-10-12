@@ -1,5 +1,6 @@
 package wojtoteka.nightdrive
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -11,7 +12,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import android.os.SystemClock
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import wojtoteka.nightdrive.engine.GamePhase
@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
         splash.setKeepOnScreenCondition { !viewModel.isReady }
 
         enableEdgeToEdge()
+        lockLandscapeOnPhones()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
@@ -73,8 +74,19 @@ class MainActivity : ComponentActivity() {
         if (hasFocus) hideSystemBars()
     }
 
+    /**
+     * The game is designed for landscape, but large screens (tablets, foldables, desktop windows)
+     * must stay free to rotate and resize - Android 16 ignores orientation locks there anyway, and
+     * Play flags apps that declare them in the manifest. So the lock is only requested at runtime,
+     * and only on phone-sized screens.
+     */
+    private fun lockLandscapeOnPhones() {
+        if (resources.configuration.smallestScreenWidthDp < 600) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+    }
+
     private fun hideSystemBars() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE

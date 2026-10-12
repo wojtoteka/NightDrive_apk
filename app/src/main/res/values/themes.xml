@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools">
+<resources>
 
-    <!-- Base app theme: dark, edge-to-edge, no action bar. Compose owns the UI. -->
+    <!-- Base app theme: dark, no action bar. Compose owns the UI; edge-to-edge (bar colours,
+         cutout mode) is set up by enableEdgeToEdge() in MainActivity, not by deprecated attrs. -->
     <style name="Theme.NightDrive" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/night_background</item>
-        <item name="android:statusBarColor">@color/transparent</item>
-        <item name="android:navigationBarColor">@color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
     </style>
