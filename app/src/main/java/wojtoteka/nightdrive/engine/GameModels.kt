@@ -54,9 +54,6 @@ class Particle(
     val size: Float,
 )
 
-/** A short-lived "picked up X" banner shown centre-screen. */
-class PowerUpToast(val type: PowerUpType, val bornAtMs: Long)
-
 /** One-shot things the UI/audio layer reacts to after each simulation step. */
 sealed interface GameEvent {
     data object CoinCollected : GameEvent

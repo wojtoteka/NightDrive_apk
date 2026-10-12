@@ -52,7 +52,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var hud by mutableStateOf(HudState()); private set
     var profileState by mutableStateOf(ProfileSnapshot()); private set
     var achievementToastKey by mutableStateOf<String?>(null); private set
-    var powerUpToast by mutableStateOf<PowerUpType?>(null); private set
     var language by mutableStateOf(Language.SYSTEM); private set
 
     // Online leaderboard
@@ -71,7 +70,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private var accumulatorMs = 0f
     private var animMs = 0f
     private var toastJob: Job? = null
-    private var powerUpToastJob: Job? = null
 
     // Live input intents - slide-to-steer surface
     private var inLeft = false
@@ -145,12 +143,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         for (i in engine.events.indices) {
             when (val ev = engine.events[i]) {
                 GameEvent.CoinCollected -> { audio.play(Sfx.COIN); haptics.tick() }
-                is GameEvent.PowerUpCollected -> {
-                    audio.play(Sfx.POINT); haptics.light()
-                    powerUpToast = ev.type
-                    powerUpToastJob?.cancel()
-                    powerUpToastJob = viewModelScope.launch { delay(1400); powerUpToast = null }
-                }
+                is GameEvent.PowerUpCollected -> { audio.play(Sfx.POINT); haptics.light() }
                 GameEvent.ShieldBlocked -> { audio.play(Sfx.POINT, 0.5f); haptics.medium() }
                 GameEvent.NewHighScore -> {}
                 GameEvent.Crash -> {

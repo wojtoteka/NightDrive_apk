@@ -41,7 +41,6 @@ class GameEngine(
     val powerups = ArrayList<PowerUp>(4)
     val stars = ArrayList<Star>(32)
     val particles = ArrayList<Particle>(64)
-    val toasts = ArrayList<PowerUpToast>(6)
 
     // Run scalars
     var score = 0; private set
@@ -112,7 +111,7 @@ class GameEngine(
     fun enterMenu(realNowMs: Long) {
         phase = GamePhase.MENU
         paused = false
-        enemies.clear(); coins.clear(); powerups.clear(); particles.clear(); toasts.clear()
+        enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         player.x = -halfWidth - C.PLAYER_START_X_MARGIN
         player.y = C.PLAYER_START_Y
         refreshDaily(realNowMs)
@@ -120,7 +119,7 @@ class GameEngine(
 
     fun startRun(realNowMs: Long) {
         refreshDaily(realNowMs)
-        enemies.clear(); coins.clear(); powerups.clear(); particles.clear(); toasts.clear()
+        enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         score = 0; coinsInSession = 0; streak = 0; globalTime = 0f; difficulty = 0
         magnetActive = false; slowmoActive = false; doubleActive = false; coinRushActive = false
         newHighAnnounced = false
@@ -204,7 +203,6 @@ class GameEngine(
         maybeSpawnCoin()
         updatePowerups()
         maybeSpawnPowerup()
-        updateToasts()
 
         difficulty = (score / 20)
 
@@ -443,7 +441,6 @@ class GameEngine(
                 coinRushActive = true
             }
         }
-        toasts += PowerUpToast(type, clockMs)
     }
 
     private fun updatePowerupTimers() {
@@ -530,7 +527,7 @@ class GameEngine(
         player.x = -70f
         player.y = -28f
         player.z = player.y / 30f
-        enemies.clear(); coins.clear(); powerups.clear(); toasts.clear(); particles.clear()
+        enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         enemies += Enemy(78f, -44f, 1f, 0)      // red, near lane
         enemies += Enemy(150f, 0f, 1f, 205)     // blue, mid-right
         enemies += Enemy(-38f, 14f, 1f, 130)    // green, far
@@ -648,14 +645,6 @@ class GameEngine(
                 s.x = rng.nextFloat(60f, halfWidth + 80f)
                 s.y = rng.intInRange(18f, 100f).toFloat()
             }
-        }
-    }
-
-    private fun updateToasts() {
-        var i = 0
-        while (i < toasts.size) {
-            if (clockMs - toasts[i].bornAtMs > 1800L) { toasts.removeAt(i); continue }
-            i++
         }
     }
 }

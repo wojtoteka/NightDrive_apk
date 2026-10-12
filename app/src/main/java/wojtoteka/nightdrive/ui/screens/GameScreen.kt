@@ -1,10 +1,6 @@
 package wojtoteka.nightdrive.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -32,6 +28,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,7 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -103,13 +102,11 @@ fun GameScreen(vm: GameViewModel) {
             if (hud.phase == GamePhase.PLAYING) {
                 SquareIconButton({ vm.togglePause() }, Modifier.align(Alignment.TopEnd)) { PauseGlyph() }
                 if (!hud.paused) {
-                    DirectionalPad(vm, Modifier.align(Alignment.BottomStart).padding(start = 4.dp, bottom = 4.dp))
+                    Joystick(vm, Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 4.dp))
                 }
             }
             PowerUpPanel(hud.powerups, Modifier.align(Alignment.CenterEnd))
         }
-
-        PowerUpToastView(vm, Modifier.align(Alignment.Center))
 
         if (hud.paused) PauseOverlay(vm)
         if (hud.phase == GamePhase.GAME_OVER) GameOverOverlay(vm)
@@ -239,29 +236,6 @@ private fun PowerUpRow(pu: HudPowerUp) {
                     }
                 } else {
                     Bar(pu.fraction, color)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PowerUpToastView(vm: GameViewModel, modifier: Modifier) {
-    val s = LocalStrings.current
-    val type = vm.powerUpToast
-    AnimatedVisibility(
-        visible = type != null,
-        enter = slideInHorizontally { it / 4 } + fadeIn(),
-        exit = fadeOut(),
-        modifier = modifier,
-    ) {
-        val t = type
-        if (t != null) {
-            Panel(fill = NDColors.PanelSolid, edge = Color(t.color)) {
-                Row(Modifier.padding(start = 18.dp, end = 22.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PowerUpGlyph(t, 30)
-                    Spacer(Modifier.width(14.dp))
-                    Text(s[t.labelKey].uppercase(), style = NDType.Title, color = NDColors.Text)
                 }
             }
         }
@@ -406,83 +380,86 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
 private fun fmtMult(m: Float): String = if (m == m.toInt().toFloat()) m.toInt().toString() else m.toString()
 
 /**
- * On-screen d-pad, bottom-left like the original game. The whole 3x3 area is one drag surface:
- * sliding a held finger from one arrow to another switches the active direction immediately,
- * without needing to lift and re-tap (corners blend the two neighbouring directions, e.g.
- * top-left presses up+left together). Still multi-touch friendly (hold up + right with two
- * fingers). While any pad button is held, pad input takes priority over the slide-to-steer
- * surface.
+ * On-screen joystick, bottom-left. Touch anywhere on the base and drag: the knob follows the
+ * finger (clamped to the rim) and its offset is turned into the engine's digital directions, one
+ * per axis past [JOY_THRESHOLD] of the radius - so diagonals come for free as an 8-way stick.
+ * Multi-touch safe (it tracks the finger that went down on it), and while it's held its input
+ * takes priority over the slide-to-steer surface, same as the old pad.
  */
 @Composable
-private fun DirectionalPad(vm: GameViewModel, modifier: Modifier = Modifier) {
-    val cell = 58.dp
-    var activeDirs by remember { mutableStateOf(emptySet<PadDir>()) }
+private fun Joystick(vm: GameViewModel, modifier: Modifier = Modifier) {
+    val base = 150.dp
+    val knob = 58.dp
+    var knobOffset by remember { mutableStateOf(Offset.Zero) }
+    var active by remember { mutableStateOf(false) }
     Box(
         modifier
-            .size(cell * 3)
+            .size(base)
             .pointerInput(Unit) {
-                val cellPx = cell.toPx()
-                awaitPointerEventScope {
+                val radius = (base - knob).toPx() / 2f
+                val center = Offset(size.width / 2f, size.height / 2f)
+                var held = emptySet<PadDir>()
+                fun apply(dirs: Set<PadDir>) {
+                    (held - dirs).forEach { vm.setPad(it, false) }
+                    (dirs - held).forEach { vm.setPad(it, true) }
+                    held = dirs
+                }
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    active = true
+                    var pos = down.position
                     while (true) {
+                        val raw = pos - center
+                        val len = raw.getDistance()
+                        val clamped = if (len > radius && len > 0f) raw * (radius / len) else raw
+                        knobOffset = clamped
+                        val nx = clamped.x / radius
+                        val ny = clamped.y / radius
+                        apply(buildSet {
+                            if (nx < -JOY_THRESHOLD) add(PadDir.LEFT)
+                            if (nx > JOY_THRESHOLD) add(PadDir.RIGHT)
+                            if (ny < -JOY_THRESHOLD) add(PadDir.UP)
+                            if (ny > JOY_THRESHOLD) add(PadDir.DOWN)
+                        })
                         val event = awaitPointerEvent()
-                        val newDirs = event.changes
-                            .filter { it.pressed }
-                            .flatMap { padDirsAt(it.position, cellPx) }
-                            .toSet()
-                        if (newDirs != activeDirs) {
-                            (activeDirs - newDirs).forEach { vm.setPad(it, false) }
-                            (newDirs - activeDirs).forEach { vm.setPad(it, true) }
-                            activeDirs = newDirs
-                        }
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                        if (change == null || !change.pressed) break
+                        change.consume()
+                        pos = change.position
                     }
+                    apply(emptySet())
+                    knobOffset = Offset.Zero
+                    active = false
                 }
             },
-    ) {
-        PadButton(PadDir.UP, PadDir.UP in activeDirs, Modifier.align(Alignment.TopCenter).size(cell))
-        PadButton(PadDir.LEFT, PadDir.LEFT in activeDirs, Modifier.align(Alignment.CenterStart).size(cell))
-        PadButton(PadDir.RIGHT, PadDir.RIGHT in activeDirs, Modifier.align(Alignment.CenterEnd).size(cell))
-        PadButton(PadDir.DOWN, PadDir.DOWN in activeDirs, Modifier.align(Alignment.BottomCenter).size(cell))
-    }
-}
-
-/** Maps a touch position within the pad's 3x3 cell grid to the direction(s) it represents. */
-private fun padDirsAt(pos: Offset, cellPx: Float): Set<PadDir> {
-    val col = (pos.x / cellPx).toInt().coerceIn(0, 2)
-    val row = (pos.y / cellPx).toInt().coerceIn(0, 2)
-    return when {
-        row == 0 && col == 1 -> setOf(PadDir.UP)
-        row == 2 && col == 1 -> setOf(PadDir.DOWN)
-        row == 1 && col == 0 -> setOf(PadDir.LEFT)
-        row == 1 && col == 2 -> setOf(PadDir.RIGHT)
-        row == 0 && col == 0 -> setOf(PadDir.UP, PadDir.LEFT)
-        row == 0 && col == 2 -> setOf(PadDir.UP, PadDir.RIGHT)
-        row == 2 && col == 0 -> setOf(PadDir.DOWN, PadDir.LEFT)
-        row == 2 && col == 2 -> setOf(PadDir.DOWN, PadDir.RIGHT)
-        else -> emptySet() // dead zone in the very centre
-    }
-}
-
-@Composable
-private fun PadButton(dir: PadDir, pressed: Boolean, modifier: Modifier) {
-    Box(
-        modifier
-            .padding(3.dp)
-            .clip(Corner.panel)
-            .background(if (pressed) NDColors.Accent else Color(0x8C0D0D12))
-            .border(BorderStroke(1.dp, if (pressed) NDColors.Accent else Color.White.copy(alpha = 0.22f)), Corner.panel),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(16.dp)) {
-            val w = size.width; val h = size.height
-            val p = Path()
-            when (dir) {
-                PadDir.UP -> { p.moveTo(w / 2, h * 0.1f); p.lineTo(w, h * 0.85f); p.lineTo(0f, h * 0.85f) }
-                PadDir.DOWN -> { p.moveTo(0f, h * 0.15f); p.lineTo(w, h * 0.15f); p.lineTo(w / 2, h * 0.9f) }
-                PadDir.LEFT -> { p.moveTo(w * 0.85f, 0f); p.lineTo(w * 0.85f, h); p.lineTo(w * 0.1f, h / 2) }
-                PadDir.RIGHT -> { p.moveTo(w * 0.15f, 0f); p.lineTo(w * 0.9f, h / 2); p.lineTo(w * 0.15f, h) }
-            }
-            p.close()
-            drawPath(p, if (pressed) NDColors.OnAccent else Color.White.copy(alpha = 0.85f))
+        // Base: dark disc, hairline rim and a faint cross marking the four axes.
+        Canvas(Modifier.size(base)) {
+            val r = size.minDimension / 2f
+            drawCircle(Color(0x8C0D0D12), r)
+            drawCircle(
+                if (active) NDColors.Accent.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.22f),
+                r - 0.5.dp.toPx(),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()),
+            )
+            val tick = 7.dp.toPx(); val inset = 9.dp.toPx()
+            val tc = Color.White.copy(alpha = 0.3f); val sw = 1.5.dp.toPx()
+            drawLine(tc, Offset(r, inset), Offset(r, inset + tick), sw)
+            drawLine(tc, Offset(r, size.height - inset), Offset(r, size.height - inset - tick), sw)
+            drawLine(tc, Offset(inset, r), Offset(inset + tick, r), sw)
+            drawLine(tc, Offset(size.width - inset, r), Offset(size.width - inset - tick, r), sw)
         }
+        // Knob
+        Box(
+            Modifier
+                .graphicsLayer { translationX = knobOffset.x; translationY = knobOffset.y }
+                .size(knob)
+                .clip(CircleShape)
+                .background(if (active) NDColors.Accent else Color(0xCC1B1B23))
+                .border(BorderStroke(1.dp, if (active) NDColors.Accent else Color.White.copy(alpha = 0.35f)), CircleShape),
+        )
     }
 }
+
+private const val JOY_THRESHOLD = 0.38f
