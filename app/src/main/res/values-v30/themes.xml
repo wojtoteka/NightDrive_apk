@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Same as values/themes.xml, plus drawing into the display cutout on every edge. "always" is
+         the one cutout mode that isn't deprecated (and what Android 15+ does anyway). -->
+    <style name="Theme.NightDrive" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/night_background</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+    </style>
+</resources>

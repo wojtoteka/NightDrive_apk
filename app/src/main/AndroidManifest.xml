@@ -18,7 +18,9 @@
         android:smallScreens="true"
         android:xlargeScreens="true" />
 
+    <!-- appCategory="game": Android 16 keeps honouring a game's orientation on large screens. -->
     <application
+        android:appCategory="game"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

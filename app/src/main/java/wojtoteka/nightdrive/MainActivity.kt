@@ -1,6 +1,7 @@
 package wojtoteka.nightdrive
 
 import android.content.pm.ActivityInfo
+import android.os.Build
 import android.os.Bundle
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -8,10 +9,10 @@ import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import android.os.SystemClock
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import wojtoteka.nightdrive.engine.GamePhase
@@ -46,7 +47,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         splash.setKeepOnScreenCondition { !viewModel.isReady }
 
-        enableEdgeToEdge()
+        drawEdgeToEdge()
         lockLandscapeOnPhones()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
@@ -93,6 +94,18 @@ class MainActivity : ComponentActivity() {
     private fun lockLandscapeOnPhones() {
         if (resources.configuration.smallestScreenWidthDp < 600) {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+    }
+
+    /**
+     * Android 15+ already forces edge-to-edge (targetSdk 35+). Below that, only let the layout
+     * extend under the always-hidden system bars; the cutout mode comes from the v30 theme. This
+     * replaces enableEdgeToEdge(), whose pre-15 code paths call the bar-colour and cutout-mode APIs
+     * that Play Console reports as deprecated.
+     */
+    private fun drawEdgeToEdge() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
         }
     }
 
