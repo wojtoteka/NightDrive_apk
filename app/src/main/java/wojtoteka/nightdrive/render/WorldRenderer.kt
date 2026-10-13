@@ -14,6 +14,9 @@ import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+/** World y of the neon line along the near edge of the road. Screens keep their content above it. */
+const val ROAD_NEAR_EDGE_Y = -90f
+
 /**
  * Draws the synthwave world (sky, sun, road grid, stars, cars, coins, power-ups, particles) using
  * [RetroCanvas]. The car and coin geometry is a faithful port of the original vector drawing;
@@ -110,7 +113,7 @@ class WorldRenderer {
         rc.alpha = 0.9f
         rc.drawLine(-w / 2f, 20f, w / 2f, 20f, theme.horizonLine)
         rc.alpha = 0.7f
-        rc.drawLine(-w / 2f, -90f, w / 2f, -90f, theme.horizonLine)
+        rc.drawLine(-w / 2f, ROAD_NEAR_EDGE_Y, w / 2f, ROAD_NEAR_EDGE_Y, theme.horizonLine)
         rc.alpha = 1f
     }
 

@@ -13,13 +13,12 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -33,8 +32,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,8 +45,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import wojtoteka.nightdrive.engine.GamePhase
 import wojtoteka.nightdrive.net.SubmitState
@@ -73,6 +74,7 @@ import wojtoteka.nightdrive.ui.theme.Corner
 import wojtoteka.nightdrive.ui.theme.LocalStrings
 import wojtoteka.nightdrive.ui.theme.NDColors
 import wojtoteka.nightdrive.ui.theme.NDType
+import kotlin.math.max
 import kotlin.math.min
 
 /** Dark drop shadow so HUD text stays legible over the bright sun and neon grid, without a glow. */
@@ -95,11 +97,11 @@ fun GameScreen(vm: GameViewModel) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         SteerSurface(vm, enabled = playing, modifier = Modifier.fillMaxSize())
 
-        // The near neon line is drawn at world y = -90 (see WorldRenderer); the joystick sits just
-        // above it instead of straddling it. Same unit mapping as WorldBackground: 200 units span
-        // the shorter side of the screen, centred.
-        val unit = min(maxWidth.value, maxHeight.value) / 200f
-        val nearLineFromBottom = maxHeight.value / 2f - NEAR_LINE_Y * unit
+        // At rest the joystick sits just above the road's near neon line instead of straddling it.
+        val restBottom = (roadEdgeFromBottom(maxWidth.value, maxHeight.value) + 12f).coerceAtLeast(14f).dp
+        val restStart = with(LocalDensity.current) {
+            WindowInsets.safeDrawing.getLeft(this, LocalLayoutDirection.current).toDp()
+        } + 24.dp
 
         if (!vm.hudHidden) Box(
             Modifier
@@ -115,13 +117,8 @@ fun GameScreen(vm: GameViewModel) {
         }
 
         if (!vm.hudHidden && playing) {
-            Joystick(
-                vm,
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                    .padding(start = 24.dp, bottom = (nearLineFromBottom + 12f).coerceAtLeast(14f).dp),
-            )
+            // The whole left half is the joystick's touch zone.
+            Joystick(vm, restStart, restBottom, Modifier.fillMaxHeight().fillMaxWidth(0.5f))
         }
 
         if (hud.paused) PauseOverlay(vm)
@@ -396,87 +393,86 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
 private fun fmtMult(m: Float): String = if (m == m.toInt().toFloat()) m.toInt().toString() else m.toString()
 
 /**
- * On-screen joystick, bottom-left. Touch anywhere on the base and drag: the knob follows the
- * finger (clamped to the rim) and its offset is turned into the engine's digital directions, one
- * per axis past [JOY_THRESHOLD] of the radius - so diagonals come for free as an 8-way stick.
- * Multi-touch safe (it tracks the finger that went down on it), and while it's held its input
- * takes priority over the slide-to-steer surface, same as the old pad.
+ * Floating joystick, Brawl Stars style. It rests bottom-left, but a touch anywhere in its zone (the
+ * left half of the screen) moves the base under the finger and the knob follows the drag (clamped
+ * to the rim); the offset turns into the engine's digital directions, one per axis past
+ * [JOY_THRESHOLD] of the radius - so diagonals come for free as an 8-way stick. Multi-touch safe
+ * (it tracks the finger that went down on it), and while it's held its input takes priority over
+ * the slide-to-steer surface, same as the old pad.
  */
 @Composable
-private fun Joystick(vm: GameViewModel, modifier: Modifier = Modifier) {
+private fun Joystick(vm: GameViewModel, restStart: Dp, restBottom: Dp, modifier: Modifier = Modifier) {
     val base = 150.dp
     val knob = 58.dp
+    var center by remember { mutableStateOf<Offset?>(null) }   // null = resting
     var knobOffset by remember { mutableStateOf(Offset.Zero) }
-    var active by remember { mutableStateOf(false) }
-    Box(
-        modifier
-            .size(base)
-            .pointerInput(Unit) {
-                val radius = (base - knob).toPx() / 2f
-                val center = Offset(size.width / 2f, size.height / 2f)
-                var held = emptySet<PadDir>()
-                fun apply(dirs: Set<PadDir>) {
-                    (held - dirs).forEach { vm.setPad(it, false) }
-                    (dirs - held).forEach { vm.setPad(it, true) }
-                    held = dirs
+    Canvas(
+        modifier.pointerInput(Unit) {
+            val baseR = base.toPx() / 2f
+            val radius = (base - knob).toPx() / 2f
+            var held = emptySet<PadDir>()
+            fun apply(dirs: Set<PadDir>) {
+                (held - dirs).forEach { vm.setPad(it, false) }
+                (dirs - held).forEach { vm.setPad(it, true) }
+                held = dirs
+            }
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                down.consume()
+                // Keep the whole base on screen when the touch lands near an edge.
+                val c = Offset(
+                    down.position.x.coerceIn(baseR, max(baseR, size.width - baseR)),
+                    down.position.y.coerceIn(baseR, max(baseR, size.height - baseR)),
+                )
+                center = c
+                var pos = down.position
+                while (true) {
+                    val raw = pos - c
+                    val len = raw.getDistance()
+                    val clamped = if (len > radius && len > 0f) raw * (radius / len) else raw
+                    knobOffset = clamped
+                    val nx = clamped.x / radius
+                    val ny = clamped.y / radius
+                    apply(buildSet {
+                        if (nx < -JOY_THRESHOLD) add(PadDir.LEFT)
+                        if (nx > JOY_THRESHOLD) add(PadDir.RIGHT)
+                        if (ny < -JOY_THRESHOLD) add(PadDir.UP)
+                        if (ny > JOY_THRESHOLD) add(PadDir.DOWN)
+                    })
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id }
+                    if (change == null || !change.pressed) break
+                    change.consume()
+                    pos = change.position
                 }
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    active = true
-                    var pos = down.position
-                    while (true) {
-                        val raw = pos - center
-                        val len = raw.getDistance()
-                        val clamped = if (len > radius && len > 0f) raw * (radius / len) else raw
-                        knobOffset = clamped
-                        val nx = clamped.x / radius
-                        val ny = clamped.y / radius
-                        apply(buildSet {
-                            if (nx < -JOY_THRESHOLD) add(PadDir.LEFT)
-                            if (nx > JOY_THRESHOLD) add(PadDir.RIGHT)
-                            if (ny < -JOY_THRESHOLD) add(PadDir.UP)
-                            if (ny > JOY_THRESHOLD) add(PadDir.DOWN)
-                        })
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id }
-                        if (change == null || !change.pressed) break
-                        change.consume()
-                        pos = change.position
-                    }
-                    apply(emptySet())
-                    knobOffset = Offset.Zero
-                    active = false
-                }
-            },
-        contentAlignment = Alignment.Center,
+                apply(emptySet())
+                knobOffset = Offset.Zero
+                center = null
+            }
+        },
     ) {
-        // Base: dark disc, hairline rim and a faint cross marking the four axes.
-        Canvas(Modifier.size(base)) {
-            val r = size.minDimension / 2f
-            drawCircle(Color(0x8C0D0D12), r)
-            drawCircle(
-                if (active) NDColors.Accent.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.22f),
-                r - 0.5.dp.toPx(),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()),
-            )
-            val tick = 7.dp.toPx(); val inset = 9.dp.toPx()
-            val tc = Color.White.copy(alpha = 0.3f); val sw = 1.5.dp.toPx()
-            drawLine(tc, Offset(r, inset), Offset(r, inset + tick), sw)
-            drawLine(tc, Offset(r, size.height - inset), Offset(r, size.height - inset - tick), sw)
-            drawLine(tc, Offset(inset, r), Offset(inset + tick, r), sw)
-            drawLine(tc, Offset(size.width - inset, r), Offset(size.width - inset - tick, r), sw)
-        }
-        // Knob
-        Box(
-            Modifier
-                .graphicsLayer { translationX = knobOffset.x; translationY = knobOffset.y }
-                .size(knob)
-                .clip(CircleShape)
-                .background(if (active) NDColors.Accent else Color(0xCC1B1B23))
-                .border(BorderStroke(1.dp, if (active) NDColors.Accent else Color.White.copy(alpha = 0.35f)), CircleShape),
+        val active = center != null
+        val r = base.toPx() / 2f
+        val c = center ?: Offset(restStart.toPx() + r, size.height - restBottom.toPx() - r)
+        // Base: translucent white disc, white rim and a cross of ticks marking the four axes.
+        drawCircle(Color.White.copy(alpha = if (active) 0.16f else 0.10f), r, c)
+        drawCircle(
+            Color.White.copy(alpha = if (active) 0.85f else 0.6f),
+            r - 0.75.dp.toPx(), c,
+            style = Stroke(1.5.dp.toPx()),
         )
+        val tick = 7.dp.toPx(); val inset = 9.dp.toPx()
+        val tc = Color.White.copy(alpha = 0.55f); val sw = 1.5.dp.toPx()
+        drawLine(tc, Offset(c.x, c.y - r + inset), Offset(c.x, c.y - r + inset + tick), sw)
+        drawLine(tc, Offset(c.x, c.y + r - inset), Offset(c.x, c.y + r - inset - tick), sw)
+        drawLine(tc, Offset(c.x - r + inset, c.y), Offset(c.x - r + inset + tick, c.y), sw)
+        drawLine(tc, Offset(c.x + r - inset, c.y), Offset(c.x + r - inset - tick, c.y), sw)
+        // Knob: solid white with a dark hairline so it still reads over the sun.
+        val k = c + knobOffset
+        val kr = knob.toPx() / 2f
+        drawCircle(Color.White.copy(alpha = if (active) 0.95f else 0.8f), kr, k)
+        drawCircle(Color.Black.copy(alpha = 0.3f), kr - 0.5.dp.toPx(), k, style = Stroke(1.dp.toPx()))
     }
 }
 
 private const val JOY_THRESHOLD = 0.38f
-private const val NEAR_LINE_Y = 90f
