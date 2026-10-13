@@ -7,16 +7,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -89,8 +92,14 @@ fun GameScreen(vm: GameViewModel) {
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         SteerSurface(vm, enabled = playing, modifier = Modifier.fillMaxSize())
+
+        // The near neon line is drawn at world y = -90 (see WorldRenderer); the joystick sits just
+        // above it instead of straddling it. Same unit mapping as WorldBackground: 200 units span
+        // the shorter side of the screen, centred.
+        val unit = min(maxWidth.value, maxHeight.value) / 200f
+        val nearLineFromBottom = maxHeight.value / 2f - NEAR_LINE_Y * unit
 
         if (!vm.hudHidden) Box(
             Modifier
@@ -101,11 +110,18 @@ fun GameScreen(vm: GameViewModel) {
             HudLeft(vm, Modifier.align(Alignment.TopStart))
             if (hud.phase == GamePhase.PLAYING) {
                 SquareIconButton({ vm.togglePause() }, Modifier.align(Alignment.TopEnd)) { PauseGlyph() }
-                if (!hud.paused) {
-                    Joystick(vm, Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 4.dp))
-                }
             }
             PowerUpPanel(hud.powerups, Modifier.align(Alignment.CenterEnd))
+        }
+
+        if (!vm.hudHidden && playing) {
+            Joystick(
+                vm,
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    .padding(start = 24.dp, bottom = (nearLineFromBottom + 12f).coerceAtLeast(14f).dp),
+            )
         }
 
         if (hud.paused) PauseOverlay(vm)
@@ -463,3 +479,4 @@ private fun Joystick(vm: GameViewModel, modifier: Modifier = Modifier) {
 }
 
 private const val JOY_THRESHOLD = 0.38f
+private const val NEAR_LINE_Y = 90f

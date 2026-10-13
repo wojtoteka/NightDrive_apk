@@ -11,12 +11,13 @@ import wojtoteka.nightdrive.R
 /**
  * Three voices, each with one job:
  *  - Edunline for the logo only,
- *  - Zepto for numbers (score, coins, prices) - reads like a digital odometer,
+ *  - BitCell for numbers (score, coins, prices) - reads like a digital odometer, and unlike the
+ *    earlier Zepto its 8 has open counters, so it can't blur into a solid block at small sizes,
  *  - the system condensed sans for headings and actions, regular sans for everything else.
  */
 object NDFonts {
     val Brand = FontFamily(Font(R.font.edunline))
-    val Display = FontFamily(Font(R.font.zepto))
+    val Display = FontFamily(Font(R.font.bitcell))
     val Condensed = FontFamily(
         Font(DeviceFontFamilyName("sans-serif-condensed"), FontWeight.Bold),
         Font(DeviceFontFamilyName("sans-serif-condensed"), FontWeight.Medium),
@@ -27,9 +28,10 @@ object NDFonts {
 object NDType {
     val Brand = TextStyle(fontFamily = NDFonts.Brand, fontSize = 44.sp, letterSpacing = 1.sp)
 
-    val Score = TextStyle(fontFamily = NDFonts.Display, fontSize = 40.sp)
-    val Readout = TextStyle(fontFamily = NDFonts.Display, fontSize = 24.sp)
-    val ReadoutSmall = TextStyle(fontFamily = NDFonts.Display, fontSize = 16.sp)
+    // BitCell's digits are ~70% the size of Zepto's at the same sp, hence the larger numbers.
+    val Score = TextStyle(fontFamily = NDFonts.Display, fontSize = 56.sp)
+    val Readout = TextStyle(fontFamily = NDFonts.Display, fontSize = 34.sp)
+    val ReadoutSmall = TextStyle(fontFamily = NDFonts.Display, fontSize = 22.sp)
 
     val Display = TextStyle(fontFamily = NDFonts.Condensed, fontWeight = FontWeight.Bold, fontSize = 44.sp, letterSpacing = 0.5.sp)
     val Title = TextStyle(fontFamily = NDFonts.Condensed, fontWeight = FontWeight.Bold, fontSize = 24.sp, letterSpacing = 0.6.sp)
