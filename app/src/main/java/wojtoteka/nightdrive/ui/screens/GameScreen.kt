@@ -113,7 +113,8 @@ fun GameScreen(vm: GameViewModel) {
             if (hud.phase == GamePhase.PLAYING) {
                 SquareIconButton({ vm.togglePause() }, Modifier.align(Alignment.TopEnd)) { PauseGlyph() }
             }
-            PowerUpPanel(hud.powerups, Modifier.align(Alignment.CenterEnd))
+            // Up in the sky, left of the pause button, so it never covers the road.
+            PowerUpPanel(hud.powerups, Modifier.align(Alignment.TopEnd).padding(end = 44.dp + 10.dp))
         }
 
         if (!vm.hudHidden && playing) {
@@ -212,44 +213,37 @@ private fun ComboTag(multiplier: Float) {
 @Composable
 private fun PowerUpPanel(powerups: List<HudPowerUp>, modifier: Modifier) {
     if (powerups.isEmpty()) return
-    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (pu in powerups) PowerUpRow(pu)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (pu in powerups) PowerUpChip(pu)
     }
 }
 
+/** Compact active power-up: its glyph (same art as the pickup on the road), time or charges left
+ * and a bar - no name, so all five can sit side by side in the sky strip. */
 @Composable
-private fun PowerUpRow(pu: HudPowerUp) {
-    val s = LocalStrings.current
+private fun PowerUpChip(pu: HudPowerUp) {
     val color = Color(pu.type.color)
-    Panel(Modifier.width(196.dp), edge = color) {
-        Row(
-            Modifier.padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PowerUpGlyph(pu.type, 22)
-            Spacer(Modifier.width(9.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        s[pu.type.labelKey].uppercase(), style = NDType.Overline, color = NDColors.Text,
-                        maxLines = 1, modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        if (pu.isCharge) "×${pu.chargeCount}" else "${pu.remainingSeconds}s",
-                        style = NDType.Overline,
-                        color = color,
-                    )
-                }
-                Spacer(Modifier.height(5.dp))
-                if (pu.isCharge) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        repeat(pu.chargeCount.coerceAtMost(8)) {
-                            Box(Modifier.size(width = 10.dp, height = 3.dp).background(color))
-                        }
+    Panel(Modifier.width(92.dp), edge = color) {
+        Column(Modifier.padding(start = 10.dp, end = 9.dp, top = 7.dp, bottom = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PowerUpGlyph(pu.type, 18)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    if (pu.isCharge) "×${pu.chargeCount}" else "${pu.remainingSeconds}s",
+                    style = NDType.Overline,
+                    color = color,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            if (pu.isCharge) {
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    repeat(pu.chargeCount.coerceAtMost(6)) {
+                        Box(Modifier.size(width = 8.dp, height = 3.dp).background(color))
                     }
-                } else {
-                    Bar(pu.fraction, color)
                 }
+            } else {
+                Bar(pu.fraction, color)
             }
         }
     }
