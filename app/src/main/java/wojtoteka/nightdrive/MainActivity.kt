@@ -1,6 +1,7 @@
 package wojtoteka.nightdrive
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.InputDevice
@@ -48,7 +49,7 @@ class MainActivity : ComponentActivity() {
         splash.setKeepOnScreenCondition { !viewModel.isReady }
 
         drawEdgeToEdge()
-        lockLandscapeOnPhones()
+        applyOrientationPolicy()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
@@ -85,16 +86,27 @@ class MainActivity : ComponentActivity() {
         if (hasFocus) hideSystemBars()
     }
 
+    // Folding/unfolding, desktop window resizes and split-screen arrive here instead of recreating
+    // the activity, so a run in progress keeps going - re-check the orientation policy each time.
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyOrientationPolicy(newConfig)
+    }
+
     /**
-     * The game is designed for landscape, but large screens (tablets, foldables, desktop windows)
-     * must stay free to rotate and resize - Android 16 ignores orientation locks there anyway, and
-     * Play flags apps that declare them in the manifest. So the lock is only requested at runtime,
-     * and only on phone-sized screens.
+     * The game is designed for landscape, so phones stay locked to it. Large screens (tablets,
+     * unfolded foldables, desktop windows) and split-screen get no lock at all: the window is free
+     * to rotate and resize, and the world and HUD already scale to any aspect ratio. Re-evaluated
+     * on every configuration change, so unfolding a phone lifts the lock and folding it restores it.
      */
-    private fun lockLandscapeOnPhones() {
-        if (resources.configuration.smallestScreenWidthDp < 600) {
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    private fun applyOrientationPolicy(config: Configuration = resources.configuration) {
+        val phoneSized = config.smallestScreenWidthDp < LARGE_SCREEN_MIN_DP
+        val wanted = if (phoneSized && !isInMultiWindowMode) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
+        if (requestedOrientation != wanted) requestedOrientation = wanted
     }
 
     /**
@@ -214,6 +226,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
+        const val LARGE_SCREEN_MIN_DP = 600
         const val STICK_DEADZONE = 0.35f
         const val STICK_FOCUS_ON = 0.6f
         const val STICK_FOCUS_OFF = 0.4f

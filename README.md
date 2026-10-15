@@ -66,7 +66,8 @@ sideloadowane testy działały na prawdziwym telefonie; lokalny serwer podpina s
 `NIGHTDRIVE_DEBUG_API`.
 
 - `minSdk` 24, `targetSdk` 36, Java 17
-- release: R8 + shrink zasobów włączone
+- telefony: tryb poziomy; tablety, składane i okna desktopowe: dowolna orientacja i rozmiar okna
+- release: R8 + zoptymalizowany shrink zasobów, Android Gradle Plugin 9
 
 > Build release podpisuje się kluczem debug, żeby sideload działał bez prawdziwego keystore.
 > Przed pierwszym wysłaniem na Google Play trzeba to zamienić na własny upload keystore -
