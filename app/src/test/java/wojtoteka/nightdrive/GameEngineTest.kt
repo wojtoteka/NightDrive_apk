@@ -278,6 +278,40 @@ class GameEngineTest {
         assertEquals(0, engine.stage)
     }
 
+    /** Plants coins on the parked player one by one and returns every event seen meanwhile. */
+    private fun collectCoins(engine: GameEngine, count: Int): List<GameEvent> {
+        val seen = ArrayList<GameEvent>()
+        for (k in 1..count) {
+            engine.coins += Coin(engine.player.x, engine.player.y - 10f, 0f)
+            var guard = 0
+            while (engine.coinsInSession < k && guard++ < 300) {
+                engine.enemies.clear()
+                engine.update(0L)
+                seen += engine.events
+            }
+        }
+        return seen
+    }
+
+    @Test
+    fun reachingAComboTierIsAnnounced() {
+        val engine = startedEngine()
+        engine.coins.clear()
+        val events = collectCoins(engine, GameConfig.COMBO_T1)
+        assertEquals(listOf(GameEvent.ComboTierUp(1)), events.filterIsInstance<GameEvent.ComboTierUp>())
+    }
+
+    @Test
+    fun newRecordIsAnnouncedOnlyWhenThereWasOneToBeat() {
+        val fresh = startedEngine()
+        fresh.coins.clear()
+        assertTrue(GameEvent.NewHighScore !in collectCoins(fresh, 1))
+
+        val veteran = startedEngine(PlayerProfile().apply { highScore = 1 })
+        veteran.coins.clear()
+        assertTrue(GameEvent.NewHighScore in collectCoins(veteran, 2))
+    }
+
     @Test
     fun comboMultiplierTiersMatchConfig() {
         assertEquals(1f, GameConfig.comboMultiplier(0), 0f)
@@ -285,6 +319,9 @@ class GameEngineTest {
         assertEquals(2f, GameConfig.comboMultiplier(GameConfig.COMBO_T2), 0f)
         assertEquals(3f, GameConfig.comboMultiplier(GameConfig.COMBO_T3), 0f)
         assertEquals(4f, GameConfig.comboMultiplier(GameConfig.COMBO_T4), 0f)
+        assertEquals(0, GameConfig.comboTier(GameConfig.COMBO_T1 - 1))
+        assertEquals(1, GameConfig.comboTier(GameConfig.COMBO_T1))
+        assertEquals(4, GameConfig.comboTier(GameConfig.COMBO_T4 + 5))
     }
 
     @Test

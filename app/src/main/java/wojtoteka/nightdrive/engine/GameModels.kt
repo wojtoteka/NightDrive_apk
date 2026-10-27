@@ -96,7 +96,11 @@ sealed interface GameEvent {
     /** A new stage of the run began; [stage] is 1 for the second minute, 2 for the third... */
     data class StageReached(val stage: Int) : GameEvent
     data object Crash : GameEvent
+    /** The run passed the previous best (only when there was one to beat). */
     data object NewHighScore : GameEvent
+    data class ComboTierUp(val tier: Int) : GameEvent
+    /** A speeder just spawned off screen; its edge marker is about to start flashing. */
+    data object SpeederIncoming : GameEvent
     data class AchievementUnlocked(val id: String) : GameEvent
     data class MissionCompleted(val type: MissionType, val goal: Int, val reward: Int) : GameEvent
     data class AllMissionsCompleted(val bonus: Int) : GameEvent

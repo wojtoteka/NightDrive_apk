@@ -109,6 +109,7 @@ class GameEngine(
     private var powerupSpawnDelay = 0f
     private var bounce = 0f
     private var newHighAnnounced = false
+    private var highScoreAtStart = 0
     // Coin-earning starter boosts (magnet/double/coin rush) arm at run start but fire on the FIRST
     // collected coin - the opening seconds have no coins, so firing immediately would waste them.
     // The slow-motion starter is defensive, not coin-driven: it activates right at run start.
@@ -187,6 +188,7 @@ class GameEngine(
         score = 0; coinsInSession = 0; streak = 0; globalTime = 0f; difficulty = 0
         magnetActive = false; slowmoActive = false; doubleActive = false; coinRushActive = false
         newHighAnnounced = false
+        highScoreAtStart = profile.highScore
         nearMissesInRun = 0; lastNearMissMs = 0L; lastNearMissPoints = 0
         bestStreakInRun = 0; powerupsInRun = 0
         wave = null; lastWave = null; wavesInRun = 0; nextWaveRunMs = C.WAVES_START_MS
@@ -287,7 +289,8 @@ class GameEngine(
 
         if (score > profile.highScore) {
             profile.highScore = score
-            if (!newHighAnnounced) { events += GameEvent.NewHighScore; newHighAnnounced = true }
+            // A first-ever run has no record to beat, so nothing to celebrate at its first point.
+            if (!newHighAnnounced && highScoreAtStart > 0) { events += GameEvent.NewHighScore; newHighAnnounced = true }
         }
         trackRunMissions()
     }
@@ -419,7 +422,10 @@ class GameEngine(
         enemies += when (kind) {
             EnemyKind.CAR -> Enemy(C.ENEMY_SPAWN_X, y, speedMult, hue)
             EnemyKind.TRUCK -> Enemy(C.ENEMY_SPAWN_X, y, speedMult * C.TRUCK_SPEED, hue, kind)
-            EnemyKind.SPEEDER -> Enemy(C.SPEEDER_SPAWN_X, y, speedMult * C.SPEEDER_SPEED, hue, kind)
+            EnemyKind.SPEEDER -> {
+                events += GameEvent.SpeederIncoming
+                Enemy(C.SPEEDER_SPAWN_X, y, speedMult * C.SPEEDER_SPEED, hue, kind)
+            }
             EnemyKind.LANE_CHANGER -> {
                 var target = if (up) y + shift else y - shift
                 if (target > C.LANE_Y_MAX || target < C.LANE_Y_MIN) target = if (up) y - shift else y + shift
@@ -545,6 +551,8 @@ class GameEngine(
     /** One more link in the combo chain (a coin or a near miss). */
     private fun bumpStreak() {
         streak += 1
+        val tier = C.comboTier(streak)
+        if (tier > C.comboTier(streak - 1)) events += GameEvent.ComboTierUp(tier)
         if (streak > bestStreakInRun) bestStreakInRun = streak
         if (streak > profile.longestStreak) profile.longestStreak = streak
         bestMission(MissionType.COMBO, streak)

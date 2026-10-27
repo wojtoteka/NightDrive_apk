@@ -243,7 +243,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     audio.play(Sfx.POINT, 0.6f, rate = 1.2f)
                     haptics.light()
                 }
-                GameEvent.NewHighScore -> {}
+                GameEvent.NewHighScore -> haptics.success()
+                is GameEvent.ComboTierUp -> haptics.comboTier(ev.tier)
+                GameEvent.SpeederIncoming -> haptics.warning()
                 GameEvent.Crash -> {
                     audio.play(Sfx.EXPLOSION)
                     audio.play(Sfx.DEFEAT)

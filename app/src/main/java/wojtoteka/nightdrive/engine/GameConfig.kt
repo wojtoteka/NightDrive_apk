@@ -118,6 +118,15 @@ object GameConfig {
     // --- Daily ---
     const val DAY_MS = 86_400_000L
 
+    /** 0 below the first tier, then 1..4 for x1.5 / x2 / x3 / x4. */
+    fun comboTier(streak: Int): Int = when {
+        streak >= COMBO_T4 -> 4
+        streak >= COMBO_T3 -> 3
+        streak >= COMBO_T2 -> 2
+        streak >= COMBO_T1 -> 1
+        else -> 0
+    }
+
     fun comboMultiplier(streak: Int): Float = when {
         streak >= COMBO_T4 -> 4f
         streak >= COMBO_T3 -> 3f
