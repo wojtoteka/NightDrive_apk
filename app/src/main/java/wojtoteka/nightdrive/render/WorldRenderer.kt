@@ -43,6 +43,10 @@ class WorldRenderer {
                 is Coin -> drawCoin(rc, obj, animMs)
                 is PowerUp -> drawPowerUp(rc, obj, animMs)
             }
+            // Fog goes over the traffic but under the player and the speeder markers, so the road
+            // ahead disappears while your own car and the warnings stay readable.
+            val fog = engine.fogAmount
+            if (fog > 0f) drawFog(rc, fog)
             drawPlayer(rc, engine, animMs)
             drawParticles(rc, engine)
             drawSpeederWarnings(rc, engine, animMs)
@@ -340,6 +344,20 @@ class WorldRenderer {
         rc.fillRound(x, y - size, 1.5f * size, 0.5f * size, 0xFF000000)
     }
 
+    // ---- Fog -------------------------------------------------------------------------------
+
+    /** Haze that thickens to the right: clear around the player, solid over the oncoming road. */
+    private fun drawFog(rc: RetroCanvas, amount: Float) {
+        val hw = rc.halfWidthUnits
+        val right = hw + 20f
+        val x0 = -0.05f * hw
+        val x1 = 0.55f * hw
+        rc.reset()
+        rc.alpha = amount * 0.96f
+        rc.fillHorizontalGradient((x0 + right) / 2f, -16f, right - x0, 156f, x0, x1, FOG_COLOR and 0x00FFFFFF, FOG_COLOR)
+        rc.reset()
+    }
+
     // ---- Particles -------------------------------------------------------------------------
 
     private fun drawParticles(rc: RetroCanvas, engine: GameEngine) {
@@ -372,5 +390,6 @@ class WorldRenderer {
         const val BLINK_MS = 180f
         const val BLINKER_COLOR = 0xFFFFB020
         const val WARNING_COLOR = 0xFFFF3D3D
+        const val FOG_COLOR = 0xFF2B2A3D
     }
 }

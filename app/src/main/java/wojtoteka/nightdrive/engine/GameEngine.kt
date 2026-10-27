@@ -50,6 +50,7 @@ class GameEngine(
     var difficulty = 0; private set
     var gameOverSlide = 0f; private set   // b_y in the original: game-over panel slide-in
     var nearMissesInRun = 0; private set
+    var wavesInRun = 0; private set
     private var lastNearMissMs = 0L
     private var lastNearMissPoints = 0
 
@@ -87,6 +88,25 @@ class GameEngine(
     private var slowmoDurMs = 1L
     private var doubleDurMs = 1L
     private var coinRushDurMs = 1L
+
+    // Late-game waves
+    var wave: WaveKind? = null; private set
+    private var lastWave: WaveKind? = null
+    private var waveStartMs = 0L
+    private var waveEndMs = 0L
+    private var nextWaveRunMs = C.WAVES_START_MS
+
+    /** Fog density 0..1 for the renderer: fades in and out over [C.FOG_FADE_MS]. */
+    val fogAmount: Float
+        get() {
+            if (wave != WaveKind.FOG) return 0f
+            val edge = min(clockMs - waveStartMs, waveEndMs - clockMs).coerceAtLeast(0L)
+            return min(1f, edge.toFloat() / C.FOG_FADE_MS)
+        }
+
+    /** The wave the HUD should be announcing right now, if any. */
+    val waveBanner: WaveKind?
+        get() = if (lastWave != null && clockMs - waveStartMs < C.WAVE_BANNER_MS) lastWave else null
 
     // Input intents (set each frame by the UI)
     private var inLeft = false
@@ -131,6 +151,7 @@ class GameEngine(
         magnetActive = false; slowmoActive = false; doubleActive = false; coinRushActive = false
         newHighAnnounced = false
         nearMissesInRun = 0; lastNearMissMs = 0L; lastNearMissPoints = 0
+        wave = null; lastWave = null; wavesInRun = 0; nextWaveRunMs = C.WAVES_START_MS
         clockMs = 0L; clockFrac = 0f; enemyTimer = 0L; coinTimer = 0L; powerupTimer = 0L; lastCoinMs = 0L
         enemySpawnDelay = C.ENEMY_START_DELAY_MS
         coinSpawnDelay = 0f
@@ -204,6 +225,7 @@ class GameEngine(
         updateComboTimeout()
         updatePowerupTimers()
         updatePlayer()
+        updateWaves()
 
         updateEnemies()
         maybeSpawnEnemy()
@@ -366,6 +388,44 @@ class GameEngine(
         if (runSec >= C.LANE_CHANGER_UNLOCK_S) { acc += C.LANE_CHANGER_CHANCE; if (roll < acc) return EnemyKind.LANE_CHANGER }
         if (runSec >= C.TRUCK_UNLOCK_S) { acc += C.TRUCK_CHANCE; if (roll < acc) return EnemyKind.TRUCK }
         return EnemyKind.CAR
+    }
+
+    // ---- Late-game waves -------------------------------------------------------------------
+
+    private fun updateWaves() {
+        val runMs = clockMs - streakStartMs
+        if (wave != null) {
+            if (clockMs >= waveEndMs) {
+                wave = null
+                nextWaveRunMs = runMs + rng.intInRange(C.WAVE_GAP_MIN_MS, C.WAVE_GAP_MAX_MS)
+            }
+            return
+        }
+        if (runMs < nextWaveRunMs) return
+        val kind = if (rng.next() < 0.5f) WaveKind.CONVOY else WaveKind.FOG
+        wave = kind
+        lastWave = kind
+        waveStartMs = clockMs
+        wavesInRun += 1
+        when (kind) {
+            WaveKind.CONVOY -> { spawnConvoy(); waveEndMs = clockMs + C.CONVOY_MS }
+            WaveKind.FOG -> waveEndMs = clockMs + C.FOG_MS
+        }
+        events += GameEvent.WaveStarted(kind)
+    }
+
+    /** A wall of same-speed cars across every lane but one, far enough out to read the gap. */
+    private fun spawnConvoy() {
+        val gap = rng.intInRange(0, C.CONVOY_LANES.size - 1)
+        val hue = rng.intInRange(0, 359)
+        val speed = min(1f + (score / 30) * 0.1f, C.SPEED_MULT_MAX)
+        for (k in C.CONVOY_LANES.indices) {
+            if (k == gap) continue
+            enemies += Enemy(C.CONVOY_SPAWN_X, C.CONVOY_LANES[k], speed, hue)
+        }
+        // Hold regular traffic back until the wall has gone by, so nothing plugs the gap.
+        enemyTimer = clockMs
+        enemySpawnDelay = C.CONVOY_MS.toFloat()
     }
 
     // ---- Coins -----------------------------------------------------------------------------

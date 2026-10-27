@@ -58,6 +58,18 @@ object GameConfig {
     const val LANE_Y_MIN = -50f
     const val LANE_Y_MAX = 25f
 
+    // --- Late-game waves (see WaveKind) ---
+    const val WAVES_START_MS = 120_000L          // the difficulty ramp tops out around here
+    const val WAVE_GAP_MIN_MS = 30_000
+    const val WAVE_GAP_MAX_MS = 45_000
+    const val WAVE_BANNER_MS = 2_200L
+    const val CONVOY_MS = 4_500L                 // regular traffic is held back this long
+    const val CONVOY_SPAWN_X = 650f
+    /** Convoy slots across the road; one is left out as the gap. Spaced so every gap is passable. */
+    val CONVOY_LANES = floatArrayOf(-46f, -21f, 2f, 22f)
+    const val FOG_MS = 12_000L
+    const val FOG_FADE_MS = 1_500L
+
     // --- Coins ---
     const val COIN_SPAWN_X = 500f
     const val COIN_BASE_SPEED = 1f

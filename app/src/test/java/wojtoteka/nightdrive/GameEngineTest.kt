@@ -11,6 +11,7 @@ import wojtoteka.nightdrive.engine.GameConfig
 import wojtoteka.nightdrive.engine.GameEngine
 import wojtoteka.nightdrive.engine.GameEvent
 import wojtoteka.nightdrive.engine.GamePhase
+import wojtoteka.nightdrive.engine.WaveKind
 
 /**
  * JVM-only sanity tests for the framework-agnostic engine: the core loop that broke would break
@@ -129,6 +130,28 @@ class GameEngineTest {
         assertEquals(0f, offScreen.y, 0f)
         assertEquals(20f, onScreen.y, 0f)
         assertTrue(!onScreen.changingLane)
+    }
+
+    @Test
+    fun firstWaveStartsAfterTwoMinutes() {
+        val engine = startedEngine()
+        var started: WaveKind? = null
+        var guard = 0
+        while (started == null && guard++ < 10_000) {
+            engine.enemies.clear() // keep the parked player alive
+            engine.update(0L)
+            started = engine.events.filterIsInstance<GameEvent.WaveStarted>().firstOrNull()?.kind
+        }
+        assertEquals(GamePhase.PLAYING, engine.phase)
+        assertTrue("a wave should start", started != null)
+        assertTrue(engine.survivalSeconds >= 120)
+        assertEquals(started, engine.waveBanner)
+        if (started == WaveKind.CONVOY) {
+            // A wall across all lanes but one.
+            assertEquals(GameConfig.CONVOY_LANES.size - 1, engine.enemies.size)
+        } else {
+            assertTrue(engine.fogAmount >= 0f)
+        }
     }
 
     @Test

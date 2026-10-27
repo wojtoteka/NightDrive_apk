@@ -61,6 +61,10 @@ data class HudPowerUp(
     val fraction: Float,
 )
 
+/** Big announcement over the road (a late-game wave). [color] is ARGB. */
+@Immutable
+data class HudBanner(val titleKey: String, val subtitleKey: String, val color: Long)
+
 /** Per-frame HUD data. Structural equality means unchanged frames cause no recomposition. */
 @Immutable
 data class HudState(
@@ -71,6 +75,9 @@ data class HudState(
     val comboMultiplier: Float = 1f,
     val streak: Int = 0,
     val nearMissFlash: Int = 0,
+    /** Last banner shown this run, kept after it hides so the fade-out still has its text. */
+    val banner: HudBanner? = null,
+    val bannerVisible: Boolean = false,
     val powerups: List<HudPowerUp> = emptyList(),
     val dailyType: Int = 0,
     val dailyGoal: Int = 30,

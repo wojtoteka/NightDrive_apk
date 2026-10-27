@@ -57,6 +57,13 @@ class PowerUp(
     var collected = false
 }
 
+/**
+ * Late-game events that start after [GameConfig.WAVES_START_MS] of a run: a convoy is a wall of
+ * cars across the road with one lane left open, fog hides the right part of the road so traffic
+ * shows up late.
+ */
+enum class WaveKind { CONVOY, FOG }
+
 /** Parallax background star. */
 class Star(var x: Float, var y: Float)
 
@@ -78,6 +85,7 @@ sealed interface GameEvent {
     data class PowerUpCollected(val type: PowerUpType) : GameEvent
     data object ShieldBlocked : GameEvent
     data class NearMiss(val points: Int) : GameEvent
+    data class WaveStarted(val kind: WaveKind) : GameEvent
     data object Crash : GameEvent
     data object NewHighScore : GameEvent
     data class AchievementUnlocked(val id: String) : GameEvent

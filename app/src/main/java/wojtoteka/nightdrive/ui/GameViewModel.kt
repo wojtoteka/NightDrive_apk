@@ -25,6 +25,7 @@ import wojtoteka.nightdrive.engine.GameConfig
 import wojtoteka.nightdrive.engine.GameEngine
 import wojtoteka.nightdrive.engine.GameEvent
 import wojtoteka.nightdrive.engine.GamePhase
+import wojtoteka.nightdrive.engine.WaveKind
 import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.net.LeaderboardEntry
 import wojtoteka.nightdrive.net.LeaderboardState
@@ -202,6 +203,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 is GameEvent.PowerUpCollected -> { audio.play(Sfx.POINT); haptics.light() }
                 GameEvent.ShieldBlocked -> { audio.play(Sfx.POINT, 0.5f); haptics.medium() }
                 is GameEvent.NearMiss -> { audio.play(Sfx.POINT, 0.45f, rate = 1.5f); haptics.tick() }
+                is GameEvent.WaveStarted -> { audio.play(Sfx.POINT, 0.8f, rate = 0.6f); haptics.medium() }
                 GameEvent.NewHighScore -> {}
                 GameEvent.Crash -> {
                     audio.play(Sfx.EXPLOSION)
@@ -234,6 +236,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         if (engine.magnetActive) pus += powerUpHud(PowerUpType.MAGNET)
         if (engine.slowmoActive) pus += powerUpHud(PowerUpType.SLOWMO)
         if (engine.coinRushActive) pus += powerUpHud(PowerUpType.COIN_RUSH)
+        val banner = currentBanner()
+        if (banner != null) lastBanner = banner
         hud = HudState(
             phase = engine.phase,
             paused = engine.paused,
@@ -242,6 +246,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             comboMultiplier = engine.comboMultiplier,
             streak = engine.streak,
             nearMissFlash = engine.nearMissFlash,
+            banner = lastBanner,
+            bannerVisible = banner != null,
             powerups = pus,
             dailyType = profile.dailyType,
             dailyGoal = profile.dailyGoal,
@@ -249,6 +255,14 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             dailyCompleted = profile.dailyCompleted,
             highScore = profile.highScore,
         )
+    }
+
+    private var lastBanner: HudBanner? = null
+
+    private fun currentBanner(): HudBanner? = when (engine.waveBanner) {
+        WaveKind.CONVOY -> CONVOY_BANNER
+        WaveKind.FOG -> FOG_BANNER
+        null -> null
     }
 
     private fun powerUpHud(type: PowerUpType) = HudPowerUp(
@@ -635,6 +649,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             hapticsEnabled = profile.hapticsEnabled,
             language = Language.fromCode(profile.language),
         )
+    }
+
+    private companion object {
+        val CONVOY_BANNER = HudBanner("wave_convoy", "wave_convoy_d", 0xFFFF3D3D)
+        val FOG_BANNER = HudBanner("wave_fog", "wave_fog_d", 0xFFB8C0D8)
     }
 
     private fun showAchievementToast(id: String) {

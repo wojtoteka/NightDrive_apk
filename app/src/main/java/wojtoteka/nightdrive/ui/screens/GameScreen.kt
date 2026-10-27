@@ -1,6 +1,10 @@
 package wojtoteka.nightdrive.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -56,6 +60,7 @@ import wojtoteka.nightdrive.engine.GamePhase
 import wojtoteka.nightdrive.net.SubmitState
 import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
+import wojtoteka.nightdrive.ui.HudBanner
 import wojtoteka.nightdrive.ui.HudPowerUp
 import wojtoteka.nightdrive.ui.PadDir
 import wojtoteka.nightdrive.ui.components.Bar
@@ -118,6 +123,8 @@ fun GameScreen(vm: GameViewModel) {
             }
             // Up in the sky, left of the pause button, so it never covers the road.
             PowerUpPanel(hud.powerups, Modifier.align(Alignment.TopEnd).padding(end = 44.dp + 10.dp))
+            // Below the score row, over the sun: announcements never sit on the lanes.
+            Banner(hud.banner, hud.bannerVisible, Modifier.align(Alignment.TopCenter).padding(top = 76.dp))
         }
 
         if (!vm.hudHidden && playing) {
@@ -248,6 +255,30 @@ private fun PowerUpChip(pu: HudPowerUp) {
                 }
             } else {
                 Bar(pu.fraction, color)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Banner(banner: HudBanner?, visible: Boolean, modifier: Modifier) {
+    val s = LocalStrings.current
+    AnimatedVisibility(
+        visible = visible && banner != null,
+        modifier = modifier,
+        enter = fadeIn() + slideInVertically { -it / 2 },
+        exit = fadeOut(),
+    ) {
+        val b = banner ?: return@AnimatedVisibility
+        val color = Color(b.color)
+        Panel(fill = NDColors.PanelSolid, edge = color) {
+            Column(
+                Modifier.padding(start = 20.dp, end = 22.dp, top = 9.dp, bottom = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(s[b.titleKey].uppercase(), style = NDType.Title, color = color)
+                Spacer(Modifier.height(2.dp))
+                Text(s[b.subtitleKey], style = NDType.Caption, color = NDColors.TextDim)
             }
         }
     }
