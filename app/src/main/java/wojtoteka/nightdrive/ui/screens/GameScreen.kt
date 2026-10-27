@@ -276,7 +276,8 @@ private fun Banner(banner: HudBanner?, visible: Boolean, modifier: Modifier) {
                 Modifier.padding(start = 20.dp, end = 22.dp, top = 9.dp, bottom = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(s[b.titleKey].uppercase(), style = NDType.Title, color = color)
+                val title = if (b.titleArg.isEmpty()) s[b.titleKey] else "${s[b.titleKey]} ${b.titleArg}"
+                Text(title.uppercase(), style = NDType.Title, color = color)
                 Spacer(Modifier.height(2.dp))
                 Text(s[b.subtitleKey], style = NDType.Caption, color = NDColors.TextDim)
             }

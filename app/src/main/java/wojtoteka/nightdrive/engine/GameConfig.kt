@@ -58,6 +58,10 @@ object GameConfig {
     const val LANE_Y_MIN = -50f
     const val LANE_Y_MAX = 25f
 
+    // --- Stages: every minute of a run is a stage, and the world can switch theme between them ---
+    const val STAGE_MS = 60_000L
+    const val STAGE_FADE_MS = 3_000f             // cross-fade between two themes
+
     // --- Late-game waves (see WaveKind) ---
     const val WAVES_START_MS = 120_000L          // the difficulty ramp tops out around here
     const val WAVE_GAP_MIN_MS = 30_000

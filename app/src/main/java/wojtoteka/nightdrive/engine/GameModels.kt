@@ -86,6 +86,8 @@ sealed interface GameEvent {
     data object ShieldBlocked : GameEvent
     data class NearMiss(val points: Int) : GameEvent
     data class WaveStarted(val kind: WaveKind) : GameEvent
+    /** A new stage of the run began; [stage] is 1 for the second minute, 2 for the third... */
+    data class StageReached(val stage: Int) : GameEvent
     data object Crash : GameEvent
     data object NewHighScore : GameEvent
     data class AchievementUnlocked(val id: String) : GameEvent

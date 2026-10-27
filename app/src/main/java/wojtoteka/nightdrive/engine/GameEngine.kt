@@ -51,6 +51,11 @@ class GameEngine(
     var gameOverSlide = 0f; private set   // b_y in the original: game-over panel slide-in
     var nearMissesInRun = 0; private set
     var wavesInRun = 0; private set
+    var stage = 0; private set
+
+    /** Time spent in the current [stage] (drives the theme cross-fade). */
+    val stageElapsedMs: Long get() = (clockMs - streakStartMs - stage * C.STAGE_MS).coerceAtLeast(0L)
+    val stageBannerVisible: Boolean get() = stage > 0 && stageElapsedMs < C.WAVE_BANNER_MS
     private var lastNearMissMs = 0L
     private var lastNearMissPoints = 0
 
@@ -141,6 +146,7 @@ class GameEngine(
         enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         player.x = -halfWidth - C.PLAYER_START_X_MARGIN
         player.y = C.PLAYER_START_Y
+        stage = 0
         refreshDaily(realNowMs)
     }
 
@@ -152,6 +158,7 @@ class GameEngine(
         newHighAnnounced = false
         nearMissesInRun = 0; lastNearMissMs = 0L; lastNearMissPoints = 0
         wave = null; lastWave = null; wavesInRun = 0; nextWaveRunMs = C.WAVES_START_MS
+        stage = 0; streakStartMs = 0L
         clockMs = 0L; clockFrac = 0f; enemyTimer = 0L; coinTimer = 0L; powerupTimer = 0L; lastCoinMs = 0L
         enemySpawnDelay = C.ENEMY_START_DELAY_MS
         coinSpawnDelay = 0f
@@ -225,6 +232,7 @@ class GameEngine(
         updateComboTimeout()
         updatePowerupTimers()
         updatePlayer()
+        updateStage()
         updateWaves()
 
         updateEnemies()
@@ -388,6 +396,16 @@ class GameEngine(
         if (runSec >= C.LANE_CHANGER_UNLOCK_S) { acc += C.LANE_CHANGER_CHANCE; if (roll < acc) return EnemyKind.LANE_CHANGER }
         if (runSec >= C.TRUCK_UNLOCK_S) { acc += C.TRUCK_CHANCE; if (roll < acc) return EnemyKind.TRUCK }
         return EnemyKind.CAR
+    }
+
+    // ---- Stages ----------------------------------------------------------------------------
+
+    private fun updateStage() {
+        val reached = ((clockMs - streakStartMs) / C.STAGE_MS).toInt()
+        if (reached > stage) {
+            stage = reached
+            events += GameEvent.StageReached(stage)
+        }
     }
 
     // ---- Late-game waves -------------------------------------------------------------------

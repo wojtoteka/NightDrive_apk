@@ -73,6 +73,7 @@ class PlayerProfile {
     var dailyType: Int = 0             // 0 = collect coins, 1 = survive seconds
 
     // Settings
+    var sceneryRotation: Boolean = true   // cycle owned world themes stage by stage during a run
     var musicEnabled: Boolean = true
     var sfxEnabled: Boolean = true
     var hapticsEnabled: Boolean = true
@@ -116,6 +117,7 @@ class PlayerProfile {
         dailyProgress = other.dailyProgress
         dailyGoal = other.dailyGoal
         dailyType = other.dailyType
+        sceneryRotation = other.sceneryRotation
         musicEnabled = other.musicEnabled
         sfxEnabled = other.sfxEnabled
         hapticsEnabled = other.hapticsEnabled

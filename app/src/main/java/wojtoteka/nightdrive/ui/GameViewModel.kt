@@ -204,6 +204,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 GameEvent.ShieldBlocked -> { audio.play(Sfx.POINT, 0.5f); haptics.medium() }
                 is GameEvent.NearMiss -> { audio.play(Sfx.POINT, 0.45f, rate = 1.5f); haptics.tick() }
                 is GameEvent.WaveStarted -> { audio.play(Sfx.POINT, 0.8f, rate = 0.6f); haptics.medium() }
+                is GameEvent.StageReached -> {
+                    stageBanner = stageBannerFor(ev.stage)
+                    audio.play(Sfx.POINT, 0.6f, rate = 1.2f)
+                    haptics.light()
+                }
                 GameEvent.NewHighScore -> {}
                 GameEvent.Crash -> {
                     audio.play(Sfx.EXPLOSION)
@@ -258,11 +263,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private var lastBanner: HudBanner? = null
+    private var stageBanner: HudBanner? = null
 
+    /** A wave outranks a stage change if both happen at once. */
     private fun currentBanner(): HudBanner? = when (engine.waveBanner) {
         WaveKind.CONVOY -> CONVOY_BANNER
         WaveKind.FOG -> FOG_BANNER
-        null -> null
+        null -> if (engine.stageBannerVisible) stageBanner else null
+    }
+
+    /** "Stage 3" over the name of the theme the world is fading into (if it changes at all). */
+    private fun stageBannerFor(stage: Int): HudBanner {
+        val rotation = WorldThemes.rotation(profile.ownedThemes, profile.selectedTheme)
+        val subtitle = if (profile.sceneryRotation && rotation.size > 1) rotation[stage % rotation.size].nameKey else "stage_d"
+        return HudBanner("stage", subtitle, 0xFFFFD60A, titleArg = (stage + 1).toString())
     }
 
     private fun powerUpHud(type: PowerUpType) = HudPowerUp(
@@ -561,6 +575,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Settings --------------------------------------------------------------------------
 
+    fun setSceneryRotation(v: Boolean) { profile.sceneryRotation = v; persist(); refreshProfileState() }
     fun setMusicEnabled(v: Boolean) { profile.musicEnabled = v; audio.musicEnabled = v; persist(); refreshProfileState() }
     fun setSfxEnabled(v: Boolean) { profile.sfxEnabled = v; audio.sfxEnabled = v; persist(); refreshProfileState() }
     fun setHapticsEnabled(v: Boolean) { profile.hapticsEnabled = v; haptics.enabled = v; if (v) haptics.light(); persist(); refreshProfileState() }
@@ -643,6 +658,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             selectedSkin = profile.selectedSkin,
             ownedThemes = profile.ownedThemes.toSet(),
             selectedTheme = profile.selectedTheme,
+            sceneryRotation = profile.sceneryRotation,
             unlockedAchievements = profile.unlockedAchievements.toSet(),
             musicEnabled = profile.musicEnabled,
             sfxEnabled = profile.sfxEnabled,

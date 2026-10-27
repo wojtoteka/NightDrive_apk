@@ -45,6 +45,7 @@ data class ProfileSnapshot(
     val selectedSkin: String = "classic",
     val ownedThemes: Set<String> = setOf("sunset"),
     val selectedTheme: String = "sunset",
+    val sceneryRotation: Boolean = true,
     val unlockedAchievements: Set<String> = emptySet(),
     val musicEnabled: Boolean = true,
     val sfxEnabled: Boolean = true,
@@ -61,9 +62,9 @@ data class HudPowerUp(
     val fraction: Float,
 )
 
-/** Big announcement over the road (a late-game wave). [color] is ARGB. */
+/** Big announcement over the road (a late-game wave, a new stage). [color] is ARGB. */
 @Immutable
-data class HudBanner(val titleKey: String, val subtitleKey: String, val color: Long)
+data class HudBanner(val titleKey: String, val subtitleKey: String, val color: Long, val titleArg: String = "")
 
 /** Per-frame HUD data. Structural equality means unchanged frames cause no recomposition. */
 @Immutable

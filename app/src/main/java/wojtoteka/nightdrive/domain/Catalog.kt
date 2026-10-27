@@ -209,4 +209,14 @@ object WorldThemes {
     )
 
     fun byId(id: String): WorldTheme = all.firstOrNull { it.id == id } ?: all.first()
+
+    /**
+     * The themes a run cycles through, one per stage: every owned theme in catalog order, starting
+     * from the selected one. With a single owned theme the world never changes.
+     */
+    fun rotation(owned: Set<String>, selected: String): List<WorldTheme> {
+        val mine = all.filter { owned.contains(it.id) }.ifEmpty { listOf(all.first()) }
+        val start = mine.indexOfFirst { it.id == selected }.coerceAtLeast(0)
+        return mine.drop(start) + mine.take(start)
+    }
 }

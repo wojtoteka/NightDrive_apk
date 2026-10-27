@@ -70,6 +70,7 @@ class GameStore(private val context: Context) {
             dailyProgress = prefs[K.dailyProgress] ?: 0
             dailyGoal = prefs[K.dailyGoal] ?: 30
             dailyType = prefs[K.dailyType] ?: 0
+            sceneryRotation = prefs[K.sceneryRotation] ?: true
             musicEnabled = prefs[K.music] ?: true
             sfxEnabled = prefs[K.sfx] ?: true
             hapticsEnabled = prefs[K.haptics] ?: true
@@ -115,6 +116,7 @@ class GameStore(private val context: Context) {
             e[K.dailyProgress] = p.dailyProgress
             e[K.dailyGoal] = p.dailyGoal
             e[K.dailyType] = p.dailyType
+            e[K.sceneryRotation] = p.sceneryRotation
             e[K.music] = p.musicEnabled
             e[K.sfx] = p.sfxEnabled
             e[K.haptics] = p.hapticsEnabled
@@ -189,6 +191,7 @@ class GameStore(private val context: Context) {
         val dailyProgress = intPreferencesKey("daily_progress")
         val dailyGoal = intPreferencesKey("daily_goal")
         val dailyType = intPreferencesKey("daily_type")
+        val sceneryRotation = booleanPreferencesKey("scenery_rotation")
         val music = booleanPreferencesKey("music_enabled")
         val sfx = booleanPreferencesKey("sfx_enabled")
         val haptics = booleanPreferencesKey("haptics_enabled")

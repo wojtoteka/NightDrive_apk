@@ -71,6 +71,10 @@ fun SettingsScreen(vm: GameViewModel) {
                     Rule()
                     SettingRow(s["haptics"], null) { Toggle(p.hapticsEnabled) { vm.setHapticsEnabled(it) } }
                     Rule()
+                    SettingRow(s["scenery_rotation"], s["scenery_rotation_d"]) {
+                        Toggle(p.sceneryRotation) { vm.setSceneryRotation(it) }
+                    }
+                    Rule()
                     SettingRow(s["language"], null) {
                         val langs = listOf(Language.SYSTEM, Language.EN, Language.PL)
                         SegmentedControl(

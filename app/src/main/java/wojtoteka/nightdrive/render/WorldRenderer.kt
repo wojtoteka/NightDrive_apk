@@ -26,7 +26,7 @@ const val ROAD_NEAR_EDGE_Y = -90f
 class WorldRenderer {
 
     fun render(rc: RetroCanvas, engine: GameEngine, animMs: Float) {
-        val theme = themeFor(engine.profile.selectedTheme)
+        val theme = sceneryTheme(engine)
         drawBackground(rc, engine, animMs, theme)
         if (engine.phase != GamePhase.MENU) {
             // Painter's algorithm: farthest objects (highest y) first, so anything nearer occludes
@@ -67,6 +67,56 @@ class WorldRenderer {
         if (id != cachedThemeId) { cachedTheme = WorldThemes.byId(id); cachedThemeId = id }
         return cachedTheme
     }
+
+    // Theme rotation (see WorldThemes.rotation), rebuilt only when ownership or selection changes.
+    private var rotationKey: String? = null
+    private var rotationOwnedCount = -1
+    private var rotation: List<WorldTheme> = emptyList()
+
+    // The cross-fade is quantised, so each in-between theme is built once, not every frame.
+    private var blendFrom: WorldTheme? = null
+    private var blendTo: WorldTheme? = null
+    private var blendStep = -1
+    private var blendTheme: WorldTheme = WorldThemes.all.first()
+
+    /** The selected theme, or - mid-run with rotation on - the theme of the current stage. */
+    private fun sceneryTheme(engine: GameEngine): WorldTheme {
+        val profile = engine.profile
+        val base = themeFor(profile.selectedTheme)
+        if (engine.phase == GamePhase.MENU || !profile.sceneryRotation || engine.stage == 0) return base
+        if (rotationKey != profile.selectedTheme || rotationOwnedCount != profile.ownedThemes.size) {
+            rotation = WorldThemes.rotation(profile.ownedThemes, profile.selectedTheme)
+            rotationKey = profile.selectedTheme
+            rotationOwnedCount = profile.ownedThemes.size
+        }
+        if (rotation.size < 2) return base
+        val to = rotation[engine.stage % rotation.size]
+        val from = rotation[(engine.stage - 1) % rotation.size]
+        val step = (engine.stageElapsedMs / GameConfig.STAGE_FADE_MS * FADE_STEPS).toInt()
+        if (step >= FADE_STEPS) return to
+        if (from !== blendFrom || to !== blendTo || step != blendStep) {
+            blendTheme = lerpTheme(from, to, step / FADE_STEPS.toFloat())
+            blendFrom = from; blendTo = to; blendStep = step
+        }
+        return blendTheme
+    }
+
+    private fun lerpTheme(a: WorldTheme, b: WorldTheme, t: Float) = WorldTheme(
+        id = "${a.id}>${b.id}", nameKey = b.nameKey, price = 0,
+        skyTop = lerpArgb(a.skyTop, b.skyTop, t),
+        skyBottom = lerpArgb(a.skyBottom, b.skyBottom, t),
+        star = lerpArgb(a.star, b.star, t),
+        sunGlow = lerpArgb(a.sunGlow, b.sunGlow, t),
+        sunTop = lerpArgb(a.sunTop, b.sunTop, t),
+        sunMid = lerpArgb(a.sunMid, b.sunMid, t),
+        sunLow = lerpArgb(a.sunLow, b.sunLow, t),
+        sunSlat = lerpArgb(a.sunSlat, b.sunSlat, t),
+        horizonGlow = lerpArgb(a.horizonGlow, b.horizonGlow, t),
+        roadTop = lerpArgb(a.roadTop, b.roadTop, t),
+        roadBottom = lerpArgb(a.roadBottom, b.roadBottom, t),
+        grid = lerpArgb(a.grid, b.grid, t),
+        horizonLine = lerpArgb(a.horizonLine, b.horizonLine, t),
+    )
 
     private fun skinFor(id: String): Skin {
         if (id != cachedSkinId) { cachedSkin = Skins.byId(id); cachedSkinId = id }
@@ -130,7 +180,7 @@ class WorldRenderer {
     private val sunSlatY = FloatArray(SUN_SLATS)
     private val sunSlatChord = FloatArray(SUN_SLATS)
     private val sunBandColors = LongArray(SUN_BANDS)
-    private var sunColorThemeId: String? = null
+    private var sunColorTheme: WorldTheme? = null
 
     init {
         for (k in 0 until SUN_BANDS) {
@@ -150,12 +200,13 @@ class WorldRenderer {
     }
 
     private fun drawSun(rc: RetroCanvas, animMs: Float, theme: WorldTheme) {
-        if (sunColorThemeId != theme.id) {
+        // Identity, not id: every cross-fade step is its own theme instance.
+        if (sunColorTheme !== theme) {
             for (k in 0 until SUN_BANDS) {
                 val t = k / (SUN_BANDS - 1f)
                 sunBandColors[k] = lerpArgb(theme.sunTop, if (t < 0.5f) theme.sunMid else theme.sunLow, t)
             }
-            sunColorThemeId = theme.id
+            sunColorTheme = theme
         }
         // outer glow
         rc.additive = true
@@ -387,6 +438,7 @@ class WorldRenderer {
         const val SUN_SLATS = 5
         const val TOKEN_ALPHA = 0.8f
         const val TOKEN_LINE = 0.8f
+        const val FADE_STEPS = 24
         const val BLINK_MS = 180f
         const val BLINKER_COLOR = 0xFFFFB020
         const val WARNING_COLOR = 0xFFFF3D3D

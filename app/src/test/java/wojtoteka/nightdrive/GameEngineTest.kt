@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import wojtoteka.nightdrive.domain.PlayerProfile
+import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.engine.Coin
 import wojtoteka.nightdrive.engine.Enemy
 import wojtoteka.nightdrive.engine.EnemyKind
@@ -152,6 +153,29 @@ class GameEngineTest {
         } else {
             assertTrue(engine.fogAmount >= 0f)
         }
+    }
+
+    @Test
+    fun everyMinuteIsANewStage() {
+        val engine = startedEngine()
+        var reached = 0
+        var guard = 0
+        while (reached == 0 && guard++ < 5_000) {
+            engine.enemies.clear()
+            engine.update(0L)
+            reached = engine.events.filterIsInstance<GameEvent.StageReached>().firstOrNull()?.stage ?: 0
+        }
+        assertEquals(1, reached)
+        assertEquals(1, engine.stage)
+        assertTrue(engine.survivalSeconds >= 60)
+        assertTrue(engine.stageBannerVisible)
+    }
+
+    @Test
+    fun themeRotationStartsAtTheSelectedTheme() {
+        val ids = WorldThemes.rotation(setOf("sunset", "aurora", "inferno"), "inferno").map { it.id }
+        assertEquals(listOf("inferno", "sunset", "aurora"), ids)
+        assertEquals(1, WorldThemes.rotation(setOf("sunset"), "sunset").size)
     }
 
     @Test
