@@ -33,7 +33,8 @@ z płynnym przejściem. Muzyka reaguje na jazdę: narasta z combo, zwalnia w slo
 po kraksie.
 
 **Codzienne granie.** Trzy misje dnia (łatwa, średnia, trudna) z nagrodami i bonusem za komplet
-oraz trasa dnia - ta sama dla wszystkich, bez tarczy z garażu i boostów, z rekordem dnia.
+oraz trasa dnia - ta sama dla wszystkich, bez tarczy z garażu i boostów, z własnym rankingiem
+online.
 Ekran końca gry podsumowuje bieg i podpowiada, ile zabrakło do rekordu i które osiągnięcie
 jest najbliżej.
 
@@ -41,9 +42,12 @@ jest najbliżej.
 deszcz monet) z trójstopniowymi ulepszeniami czasu trwania - osobno albo pakietem.
 Do tego 24 osiągnięcia z nagrodami w monetach.
 
-**Ranking online.** Wyniki idą na własne API i są podpisywane HMAC-SHA256, więc serwer odrzuca
-spreparowane zgłoszenia. Klucz i sekret nie leżą w kodzie - build wciąga je z `local.properties`.
-Bez internetu gra działa w całości offline.
+**Ranking online.** Top 10 wszech czasów i Top 10 trasy dnia na własnym API. Zgłoszenie jest
+podpisane HMAC-SHA256 razem z wersją gry, skrótem certyfikatu, którym podpisano APK, i losowym id
+instalacji (do niego przypisany jest nick, więc nikt nie nadpisze cudzego wpisu). Dochodzi do tego
+token Google Play Integrity, którego zmodowana wersja gry nie podrobi - serwer może dzięki temu
+nie wpuszczać do rankingu przerobionych kopii. Klucz i sekret nie leżą w kodzie - build wciąga je
+z `local.properties`. Bez internetu gra działa w całości offline.
 
 **Bez reklam.** Żadnego SDK reklamowego, żadnych zgód UMP - gra nie wysyła nic poza wynikami
 do rankingu.
