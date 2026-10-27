@@ -35,6 +35,8 @@ class GameEngine(
 
     var mode: RunMode = RunMode.STANDARD; private set
     private var runDayKey = 0L
+    /** UTC day number this run started on (the daily route's day and its ranking). */
+    val runDay: Long get() = runDayKey
     /** The daily route's shield: starts empty, filled only by pickups, never saved. */
     private var runShieldCharges = 0
     /** This daily-route run beat the day's best so far. */

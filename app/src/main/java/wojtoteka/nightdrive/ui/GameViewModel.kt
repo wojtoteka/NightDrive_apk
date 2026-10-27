@@ -30,6 +30,7 @@ import wojtoteka.nightdrive.engine.GamePhase
 import wojtoteka.nightdrive.engine.RunMode
 import wojtoteka.nightdrive.engine.WaveKind
 import wojtoteka.nightdrive.domain.WorldThemes
+import wojtoteka.nightdrive.net.Board
 import wojtoteka.nightdrive.net.LeaderboardEntry
 import wojtoteka.nightdrive.net.LeaderboardState
 import wojtoteka.nightdrive.net.SubmitState
@@ -60,12 +61,15 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     // Online leaderboard
     var leaderboardState by mutableStateOf<LeaderboardState>(LeaderboardState.Loading); private set
+    var leaderboardBoard by mutableStateOf(Board.GLOBAL); private set
     var scoreQualifies by mutableStateOf(false); private set
     var submitState by mutableStateOf<SubmitState>(SubmitState.Idle); private set
 
     val lastNickname: String get() = profile.playerName
     private var sessionId: String? = null
     private var gameOverScore = 0
+    /** UTC day of the daily route the last run belongs to; null after a standard run. */
+    private var gameOverDay: Long? = null
     private var cachedTop: List<LeaderboardEntry> = emptyList()
 
     val worldAnimMs: Float get() = animMs
@@ -252,8 +256,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     audio.play(Sfx.DEFEAT)
                     haptics.heavy()
                     onGameOver()
-                    // The daily route has no global ranking entry (see RunMode.DAILY).
-                    if (engine.mode == RunMode.STANDARD) evaluateQualification(engine.score)
+                    // A daily route run competes on that day's board, not the all-time one.
+                    evaluateQualification(engine.score, if (engine.mode == RunMode.DAILY) engine.runDay else null)
                 }
                 is GameEvent.AchievementUnlocked -> {
                     audio.play(Sfx.COIN, 0.6f)
@@ -368,6 +372,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun goTo(dest: Destination) {
+        // Straight from a daily route's game over, the ranking opens on that route's board.
+        if (dest == Destination.LEADERBOARD) {
+            leaderboardBoard = if (engine.mode == RunMode.DAILY && engine.phase == GamePhase.GAME_OVER) Board.DAILY else Board.GLOBAL
+        }
         // Navigating anywhere outside gameplay (e.g. game-over -> leaderboard) must reset the
         // world, otherwise leftover cars/coins from the last run linger behind menu screens.
         if (dest != Destination.GAME && engine.phase != GamePhase.MENU) {
@@ -403,7 +411,6 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         submitState = SubmitState.Idle
         sessionId = null
         val token = ++runToken
-        if (engine.mode != RunMode.STANDARD) return
         // Retry a couple of times so a brief hiccup at run start doesn't cost the session.
         viewModelScope.launch {
             for (delayMs in longArrayOf(0L, 3000L, 8000L)) {
@@ -417,17 +424,28 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Leaderboard -----------------------------------------------------------------------
 
+    fun selectBoard(board: Board) {
+        if (board == leaderboardBoard) return
+        leaderboardBoard = board
+        fetchLeaderboard()
+    }
+
     fun fetchLeaderboard() {
         if (showcase) { leaderboardState = LeaderboardState.Success(showcaseBoard); return }
         leaderboardState = LeaderboardState.Loading
+        val board = leaderboardBoard
         viewModelScope.launch {
-            leaderboardState = try {
-                val top = leaderboardApi.fetchTop()
-                cachedTop = top
+            val state = try {
+                val top = when (board) {
+                    Board.GLOBAL -> leaderboardApi.fetchTop().also { cachedTop = it }
+                    Board.DAILY -> leaderboardApi.fetchDaily(today())
+                }
                 LeaderboardState.Success(top)
             } catch (_: Exception) {
                 LeaderboardState.Offline
             }
+            // A slow answer for the tab the player already left must not overwrite the new one.
+            if (board == leaderboardBoard) leaderboardState = state
         }
     }
 
@@ -436,14 +454,15 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
      * Qualification depends only on the leaderboard itself - the play session is resolved (and
      * retried) at submit time, so a slow session handshake never hides the name field.
      */
-    private fun evaluateQualification(finalScore: Int) {
+    private fun evaluateQualification(finalScore: Int, dailyDay: Long?) {
         gameOverScore = finalScore
+        gameOverDay = dailyDay
         scoreQualifies = false
         if (finalScore <= 0) return
         viewModelScope.launch {
             try {
-                val top = leaderboardApi.fetchTop()
-                cachedTop = top
+                val top = if (dailyDay == null) leaderboardApi.fetchTop().also { cachedTop = it }
+                else leaderboardApi.fetchDaily(dailyDay)
                 scoreQualifies = top.size < 10 || finalScore > top.minOf { it.score }
             } catch (_: Exception) {
                 // Can't reach the ranking - tell the player why there's no entry field.
@@ -464,7 +483,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val sid = sessionId ?: leaderboardApi.startSession().also { sessionId = it }
             if (sid == null) { submitState = SubmitState.Offline; return@launch }
             submitState = try {
-                val r = leaderboardApi.submit(sid, trimmed, gameOverScore, profile.playerId)
+                val r = leaderboardApi.submit(sid, trimmed, gameOverScore, profile.playerId, gameOverDay)
                 when {
                     r.accepted -> {
                         sessionId = null

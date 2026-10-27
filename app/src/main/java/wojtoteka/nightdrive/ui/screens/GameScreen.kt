@@ -433,15 +433,10 @@ private fun NextGoals(vm: GameViewModel, isRecord: Boolean) {
     }
 }
 
-/** Game-over → offer to save the score to the online Top 10 when it qualifies. */
+/** Game-over → offer to save the score to the online Top 10 (or today's route board) when it qualifies. */
 @Composable
 private fun LeaderboardEntrySection(vm: GameViewModel) {
     val s = LocalStrings.current
-    if (vm.hud.dailyRun) {
-        Spacer(Modifier.height(10.dp))
-        Text(s["daily_run_note"], style = NDType.Caption, color = NDColors.TextFaint)
-        return
-    }
     val line: Pair<String, Color>? = when (val st = vm.submitState) {
         is SubmitState.Done -> "${s["saved_rank"]} #${st.rank ?: "?"}" to NDColors.Positive
         SubmitState.Submitting -> s["submitting"] to NDColors.TextDim
@@ -457,7 +452,13 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
         Overline(line.first, color = line.second)
         return
     }
-    if (!vm.scoreQualifies) return
+    if (!vm.scoreQualifies) {
+        if (vm.hud.dailyRun) {
+            Spacer(Modifier.height(10.dp))
+            Text(s["daily_run_note"], style = NDType.Caption, color = NDColors.TextFaint)
+        }
+        return
+    }
 
     var name by remember { mutableStateOf(vm.lastNickname) }
     val submit = { if (name.trim().isNotEmpty()) vm.submitNickname(name) }
@@ -465,7 +466,7 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
     Panel(Modifier.fillMaxWidth(), edge = NDColors.Accent) {
         Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)) {
             if (vm.submitState == SubmitState.NameTaken) Overline(s["name_taken"], color = NDColors.Danger)
-            else Overline(s["you_qualified"], color = NDColors.Accent)
+            else Overline(if (vm.hud.dailyRun) s["you_qualified_daily"] else s["you_qualified"], color = NDColors.Accent)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
