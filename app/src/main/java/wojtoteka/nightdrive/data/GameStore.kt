@@ -49,6 +49,7 @@ class GameStore(private val context: Context) {
             lifetimeShieldBlocks = prefs[K.lifetimeShieldBlocks] ?: 0
             lifetimeBoostsUsed = prefs[K.lifetimeBoostsUsed] ?: 0
             lifetimePowerups = prefs[K.lifetimePowerups] ?: 0
+            lifetimeNearMisses = prefs[K.lifetimeNearMisses] ?: 0
             ownedSkins = (prefs[K.ownedSkins] ?: setOf(Skins.DEFAULT_ID)).toMutableSet()
             selectedSkin = prefs[K.selectedSkin] ?: Skins.DEFAULT_ID
             ownedThemes = (prefs[K.ownedThemes] ?: setOf(WorldThemes.DEFAULT_ID)).toMutableSet()
@@ -101,6 +102,7 @@ class GameStore(private val context: Context) {
             e[K.lifetimeShieldBlocks] = p.lifetimeShieldBlocks
             e[K.lifetimeBoostsUsed] = p.lifetimeBoostsUsed
             e[K.lifetimePowerups] = p.lifetimePowerups
+            e[K.lifetimeNearMisses] = p.lifetimeNearMisses
             e[K.ownedSkins] = p.ownedSkins
             e[K.selectedSkin] = p.selectedSkin
             e[K.ownedThemes] = p.ownedThemes
@@ -142,6 +144,7 @@ class GameStore(private val context: Context) {
         p.lifetimeShieldBlocks = 0
         p.lifetimeBoostsUsed = 0
         p.lifetimePowerups = 0
+        p.lifetimeNearMisses = 0
         p.ownedSkins = mutableSetOf(Skins.DEFAULT_ID)
         p.selectedSkin = Skins.DEFAULT_ID
         p.ownedThemes = mutableSetOf(WorldThemes.DEFAULT_ID)
@@ -173,6 +176,7 @@ class GameStore(private val context: Context) {
         val lifetimeShieldBlocks = intPreferencesKey("lifetime_shield_blocks")
         val lifetimeBoostsUsed = intPreferencesKey("lifetime_boosts_used")
         val lifetimePowerups = intPreferencesKey("lifetime_powerups")
+        val lifetimeNearMisses = intPreferencesKey("lifetime_near_misses")
         val ownedSkins = stringSetPreferencesKey("owned_skins")
         val selectedSkin = stringPreferencesKey("selected_skin")
         val ownedThemes = stringSetPreferencesKey("owned_themes")

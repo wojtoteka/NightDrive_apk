@@ -64,6 +64,41 @@ class GameEngineTest {
         assertTrue(engine.events.contains(GameEvent.ShieldBlocked))
     }
 
+    /** Drives [enemy] past the parked player and returns the engine once it has left the screen. */
+    private fun passEnemy(engine: GameEngine, enemy: Enemy): GameEngine {
+        engine.enemies.clear(); engine.coins.clear(); engine.powerups.clear()
+        engine.enemies += enemy
+        var guard = 0
+        while (engine.enemies.contains(enemy) && engine.phase == GamePhase.PLAYING && guard++ < 600) {
+            engine.update(0L)
+            engine.coins.clear(); engine.powerups.clear()
+        }
+        return engine
+    }
+
+    @Test
+    fun carPassingByAHairPaysANearMiss() {
+        val engine = startedEngine()
+        val p = engine.player
+        // Player hitbox (near lane) spans enemy y in about [py - 9, py + 11]: 15 above misses it.
+        val engineAfter = passEnemy(engine, Enemy(p.x + 70f, p.y + 15f, 3f, 0))
+        assertEquals(GamePhase.PLAYING, engineAfter.phase)
+        assertEquals(1, engineAfter.nearMissesInRun)
+        assertEquals(1, engineAfter.profile.lifetimeNearMisses)
+        assertEquals(1, engineAfter.streak)
+        assertTrue("near miss should score", engineAfter.score >= 1)
+    }
+
+    @Test
+    fun carPassingFarAwayIsNoNearMiss() {
+        val engine = startedEngine()
+        val p = engine.player
+        passEnemy(engine, Enemy(p.x + 70f, p.y + 45f, 3f, 0))
+        assertEquals(GamePhase.PLAYING, engine.phase)
+        assertEquals(0, engine.nearMissesInRun)
+        assertEquals(0, engine.score)
+    }
+
     @Test
     fun comboMultiplierTiersMatchConfig() {
         assertEquals(1f, GameConfig.comboMultiplier(0), 0f)

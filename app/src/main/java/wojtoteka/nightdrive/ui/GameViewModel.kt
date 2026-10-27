@@ -201,6 +201,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 GameEvent.CoinCollected -> { audio.play(Sfx.COIN); haptics.tick() }
                 is GameEvent.PowerUpCollected -> { audio.play(Sfx.POINT); haptics.light() }
                 GameEvent.ShieldBlocked -> { audio.play(Sfx.POINT, 0.5f); haptics.medium() }
+                is GameEvent.NearMiss -> { audio.play(Sfx.POINT, 0.45f, rate = 1.5f); haptics.tick() }
                 GameEvent.NewHighScore -> {}
                 GameEvent.Crash -> {
                     audio.play(Sfx.EXPLOSION)
@@ -240,6 +241,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             coinsInSession = engine.coinsInSession,
             comboMultiplier = engine.comboMultiplier,
             streak = engine.streak,
+            nearMissFlash = engine.nearMissFlash,
             powerups = pus,
             dailyType = profile.dailyType,
             dailyGoal = profile.dailyGoal,
@@ -616,6 +618,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             lifetimeShieldBlocks = profile.lifetimeShieldBlocks,
             lifetimeBoostsUsed = profile.lifetimeBoostsUsed,
             lifetimePowerups = profile.lifetimePowerups,
+            lifetimeNearMisses = profile.lifetimeNearMisses,
             dailyType = profile.dailyType,
             dailyGoal = profile.dailyGoal,
             dailyProgress = profile.dailyProgress,

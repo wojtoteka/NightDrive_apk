@@ -49,6 +49,9 @@ class GameEngine(
     var globalTime = 0f; private set
     var difficulty = 0; private set
     var gameOverSlide = 0f; private set   // b_y in the original: game-over panel slide-in
+    var nearMissesInRun = 0; private set
+    private var lastNearMissMs = 0L
+    private var lastNearMissPoints = 0
 
     // Power-up runtime
     var magnetActive = false; private set
@@ -95,6 +98,10 @@ class GameEngine(
 
     val survivalSeconds: Int get() = ((clockMs - streakStartMs) / 1000L).toInt().coerceAtLeast(0)
     val comboMultiplier: Float get() = C.comboMultiplier(streak)
+
+    /** Points of the latest near-miss while its HUD tag is still showing, otherwise 0. */
+    val nearMissFlash: Int
+        get() = if (nearMissesInRun > 0 && clockMs - lastNearMissMs < C.NEAR_MISS_FLASH_MS) lastNearMissPoints else 0
     fun nowMs(): Long = clockMs
 
     init { buildStars() }
@@ -123,6 +130,7 @@ class GameEngine(
         score = 0; coinsInSession = 0; streak = 0; globalTime = 0f; difficulty = 0
         magnetActive = false; slowmoActive = false; doubleActive = false; coinRushActive = false
         newHighAnnounced = false
+        nearMissesInRun = 0; lastNearMissMs = 0L; lastNearMissPoints = 0
         clockMs = 0L; clockFrac = 0f; enemyTimer = 0L; coinTimer = 0L; powerupTimer = 0L; lastCoinMs = 0L
         enemySpawnDelay = C.ENEMY_START_DELAY_MS
         coinSpawnDelay = 0f
@@ -252,7 +260,7 @@ class GameEngine(
             val e = enemies[i]
             e.x -= (e.speed + globalTime / 55f) * factor
             if (e.x <= despawnX) { enemies.removeAt(i); continue }
-            if (enemyHitsPlayer(e)) {
+            if (enemyOverlaps(e, 0f, 0f)) {
                 if (profile.shieldCharges > 0) {
                     profile.shieldCharges -= 1
                     profile.lifetimeShieldBlocks += 1
@@ -265,11 +273,25 @@ class GameEngine(
                     return
                 }
             }
+            // Near miss: the car entered the padded band around the player and left it again
+            // without a collision (a collision removes the car above, so it never gets here).
+            if (!e.nearMissed) {
+                if (enemyOverlaps(e, C.NEAR_MISS_PAD_X, C.NEAR_MISS_PAD_Y)) {
+                    e.grazing = true
+                } else if (e.grazing) {
+                    e.nearMissed = true
+                    awardNearMiss(e)
+                }
+            }
             i++
         }
     }
 
-    private fun enemyHitsPlayer(e: Enemy): Boolean {
+    /**
+     * The original per-depth collision box between [e] and the player, grown by [padX]/[padY] on
+     * every side. With zero padding this is exactly the crash test; padded it is the near-miss band.
+     */
+    private fun enemyOverlaps(e: Enemy, padX: Float, padY: Float): Boolean {
         val ph = C.PLAYER_HITBOX
         val hb = C.ENEMY_HITBOX
         val px = player.x
@@ -279,15 +301,29 @@ class GameEngine(
         val size = 10f - y / 9f
         return when {
             y <= -20f ->
-                x - hb * 2.3f <= px + ph && x + hb * 2.3f - size >= px - ph &&
-                    y + hb / 4f - 10f >= py - ph / 4f - 9f && y - hb / 4f - 10f <= py + ph / 4f - 9f
+                x - hb * 2.3f <= px + ph + padX && x + hb * 2.3f - size >= px - ph - padX &&
+                    y + hb / 4f - 10f >= py - ph / 4f - 9f - padY && y - hb / 4f - 10f <= py + ph / 4f - 9f + padY
             y <= 10f ->
-                x - hb * 1.4f <= px + ph && x + hb * 1.4f - size >= px - ph &&
-                    y + hb / 7f - 10f >= py - ph / 4f - 10f && y - hb / 7f - 10f <= py + ph / 4f - 10f
+                x - hb * 1.4f <= px + ph + padX && x + hb * 1.4f - size >= px - ph - padX &&
+                    y + hb / 7f - 10f >= py - ph / 4f - 10f - padY && y - hb / 7f - 10f <= py + ph / 4f - 10f + padY
             else ->
-                x - hb <= px + ph && x + hb - size >= px - ph &&
-                    y + hb / 12f - 8f >= py - ph / 5f - 8f && y - hb / 12f - 8f <= py + ph / 5f - 8f
+                x - hb <= px + ph + padX && x + hb - size >= px - ph - padX &&
+                    y + hb / 12f - 8f >= py - ph / 5f - 8f - padY && y - hb / 12f - 8f <= py + ph / 5f - 8f + padY
         }
+    }
+
+    private fun awardNearMiss(e: Enemy) {
+        val value = ceil(C.NEAR_MISS_POINTS * comboMultiplier * (if (doubleActive) 2f else 1f)).toInt()
+        score += value
+        lastCoinMs = clockMs // a near miss keeps the combo timer alive, like a coin
+        bumpStreak()
+        nearMissesInRun += 1
+        profile.lifetimeNearMisses += 1
+        lastNearMissMs = clockMs
+        lastNearMissPoints = value
+        spawnNearMissSparks(e)
+        events += GameEvent.NearMiss(value)
+        checkAchievements()
     }
 
     private fun maybeSpawnEnemy() {
@@ -343,24 +379,29 @@ class GameEngine(
         val value = ceil(1f * comboMultiplier * (if (doubleActive) 2f else 1f)).toInt()
         score += value
         coinsInSession += 1
-        streak += 1
         lastCoinMs = clockMs
         val coinGain = if (coinRushActive) 2 else 1
         profile.totalCoins += coinGain
         profile.lifetimeCoins += coinGain
-        if (streak > profile.longestStreak) profile.longestStreak = streak
+        bumpStreak()
         spawnCoinSparkle()
         events += GameEvent.CoinCollected
         if (!profile.dailyCompleted && profile.dailyType == 0) {
             profile.dailyProgress += 1
             if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
         }
+        checkAchievements()
+    }
+
+    /** One more link in the combo chain (a coin or a near miss). */
+    private fun bumpStreak() {
+        streak += 1
+        if (streak > profile.longestStreak) profile.longestStreak = streak
         // Combo daily tracks the best streak reached today (across runs).
         if (!profile.dailyCompleted && profile.dailyType == 2) {
             if (streak > profile.dailyProgress) profile.dailyProgress = streak
             if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
         }
-        checkAchievements()
     }
 
     private fun maybeSpawnCoin() {
@@ -590,6 +631,7 @@ class GameEngine(
         AchievementKind.SHIELD_BLOCK -> profile.lifetimeShieldBlocks >= a.goal
         AchievementKind.BOOST_USED -> profile.lifetimeBoostsUsed >= a.goal
         AchievementKind.POWERUP_COLLECT -> profile.lifetimePowerups >= a.goal
+        AchievementKind.NEAR_MISS -> profile.lifetimeNearMisses >= a.goal
     }
 
     // ---- Particles & stars -----------------------------------------------------------------
@@ -600,6 +642,19 @@ class GameEngine(
                 x = player.x, y = player.y + 6f,
                 vx = rng.nextFloat(-1.4f, 1.4f), vy = rng.nextFloat(0.4f, 2.0f),
                 life = 1f, maxLife = 1f, color = 0xFFFFD54A, size = rng.nextFloat(0.8f, 1.8f),
+            )
+        }
+    }
+
+    /** Cyan sparks streaking off between the player and the car that just slipped past. */
+    private fun spawnNearMissSparks(e: Enemy) {
+        val mx = (player.x + e.x) / 2f
+        val my = (player.y + e.y) / 2f
+        repeat(8) {
+            particles += Particle(
+                x = mx, y = my,
+                vx = rng.nextFloat(-2.6f, -0.6f), vy = rng.nextFloat(-0.8f, 1.6f),
+                life = 1f, maxLife = 1f, color = 0xFF37E7FF, size = rng.nextFloat(0.8f, 1.6f),
             )
         }
     }

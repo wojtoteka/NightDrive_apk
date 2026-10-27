@@ -77,6 +77,9 @@ import wojtoteka.nightdrive.ui.theme.NDType
 import kotlin.math.max
 import kotlin.math.min
 
+/** Same cyan as the near-miss sparks on the road, so the tag reads as their label. */
+private val NearMissColor = Color(0xFF37E7FF)
+
 /** Dark drop shadow so HUD text stays legible over the bright sun and neon grid, without a glow. */
 private val hudShadow = Shadow(Color(0xCC000000), Offset(0f, 2f), 6f)
 
@@ -182,6 +185,7 @@ private fun HudLeft(vm: GameViewModel, modifier: Modifier) {
                 }
             }
             if (hud.comboMultiplier > 1f) ComboTag(hud.comboMultiplier)
+            if (hud.nearMissFlash > 0) Tag("${s["near_miss"]} +${hud.nearMissFlash}", color = NearMissColor, filled = true)
         }
         // Live daily progress for every goal type that advances mid-run (coins, combo, power-ups);
         // the survival type only updates at crash, so it never renders here.

@@ -58,11 +58,12 @@ class AudioController(private val context: Context) {
         }
     }
 
-    fun play(sfx: Sfx, volume: Float = sfx.defaultVolume) {
+    /** [rate] is SoundPool's playback rate (0.5-2.0): above 1 plays the effect higher and shorter. */
+    fun play(sfx: Sfx, volume: Float = sfx.defaultVolume, rate: Float = 1f) {
         if (!sfxEnabled) return
         val id = soundIds[sfx] ?: return
         val v = volume.coerceIn(0f, 1f)
-        soundPool.play(id, v, v, 1, 0, 1f)
+        soundPool.play(id, v, v, 1, 0, rate.coerceIn(0.5f, 2f))
     }
 
     // ---- Music -----------------------------------------------------------------------------

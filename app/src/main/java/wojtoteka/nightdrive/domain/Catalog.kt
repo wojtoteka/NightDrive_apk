@@ -32,6 +32,7 @@ enum class AchievementKind {
     SHIELD_BLOCK,      // lifetime collisions blocked by the shield
     BOOST_USED,        // lifetime starter boosts consumed at run start
     POWERUP_COLLECT,   // lifetime power-ups picked up on the road
+    NEAR_MISS,         // lifetime cars passed by a hair
 }
 
 data class Achievement(
@@ -65,6 +66,8 @@ object Achievements {
         Achievement("shield25", "ach_shield25", "ach_shield25_d", 25, AchievementKind.SHIELD_BLOCK, 75),
         Achievement("boosts25", "ach_boosts25", "ach_boosts25_d", 25, AchievementKind.BOOST_USED, 60),
         Achievement("powerups50", "ach_powerups50", "ach_powerups50_d", 50, AchievementKind.POWERUP_COLLECT, 50),
+        Achievement("nearmiss25", "ach_nearmiss25", "ach_nearmiss25_d", 25, AchievementKind.NEAR_MISS, 20),
+        Achievement("nearmiss200", "ach_nearmiss200", "ach_nearmiss200_d", 200, AchievementKind.NEAR_MISS, 100),
     )
 }
 

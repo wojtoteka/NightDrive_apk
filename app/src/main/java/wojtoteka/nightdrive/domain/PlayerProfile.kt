@@ -17,10 +17,11 @@ class PlayerProfile {
     var longestStreakTimeSec: Int = 0
     var shieldCharges: Int = 0         // carried between runs, max 5
 
-    // Lifetime counters feeding the SHIELD_BLOCK / BOOST_USED / POWERUP_COLLECT achievements.
+    // Lifetime counters feeding the SHIELD_BLOCK / BOOST_USED / POWERUP_COLLECT / NEAR_MISS achievements.
     var lifetimeShieldBlocks: Int = 0
     var lifetimeBoostsUsed: Int = 0
     var lifetimePowerups: Int = 0
+    var lifetimeNearMisses: Int = 0
 
     // Starter boosts bought in the shop: stock of one-shot activations consumed at the start
     // of the next run (one of each kind per run), on top of the normal in-run random spawns.
@@ -102,6 +103,7 @@ class PlayerProfile {
         lifetimeShieldBlocks = other.lifetimeShieldBlocks
         lifetimeBoostsUsed = other.lifetimeBoostsUsed
         lifetimePowerups = other.lifetimePowerups
+        lifetimeNearMisses = other.lifetimeNearMisses
         ownedSkins = other.ownedSkins.toMutableSet()
         selectedSkin = other.selectedSkin
         ownedThemes = other.ownedThemes.toMutableSet()

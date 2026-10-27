@@ -60,6 +60,14 @@ object GameConfig {
     // at pickup durations (5-12s) they could never repay their coin price.
     const val STARTER_BOOST_MS = 60_000L
 
+    // --- Near miss ---
+    // A car that passes through this band around the player's hitbox without touching it pays out
+    // a near-miss bonus and keeps the combo alive, so riding close to traffic is worth the risk.
+    const val NEAR_MISS_PAD_X = 6f
+    const val NEAR_MISS_PAD_Y = 7f
+    const val NEAR_MISS_POINTS = 1f
+    const val NEAR_MISS_FLASH_MS = 900L          // how long the HUD shows the "close!" tag
+
     // --- Combo ---
     const val COMBO_TIMEOUT_MS = 3500L
     const val COMBO_T1 = 3   // x1.5

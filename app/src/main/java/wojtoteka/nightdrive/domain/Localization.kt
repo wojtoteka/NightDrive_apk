@@ -106,7 +106,7 @@ class Strings(setting: Language) {
             "ach_daily30_d" to "Reach a 30 day streak",
             "ach_daily100" to "Devoted",
             "ach_daily100_d" to "Reach a 100 day streak",
-            "tip_controls" to "Slide your finger or use the joystick to steer",
+            "tip_controls" to "Slide your finger or use the joystick to steer. Passing cars by a hair pays a bonus",
             "leaderboard" to "Leaderboard",
             "top10_title" to "Global Top 10",
             "leaderboard_offline" to "You're offline - the leaderboard needs a connection",
@@ -188,6 +188,11 @@ class Strings(setting: Language) {
             "ach_boosts25_d" to "Use 25 starter boosts",
             "ach_powerups50" to "Amulet Hunter",
             "ach_powerups50_d" to "Pick up 50 power-ups on the road",
+            "near_miss" to "Close!",
+            "ach_nearmiss25" to "Close Call",
+            "ach_nearmiss25_d" to "Pass 25 cars by a hair",
+            "ach_nearmiss200" to "Razor's Edge",
+            "ach_nearmiss200_d" to "Pass 200 cars by a hair",
         )
 
         private val PL: Map<String, String> = mapOf(
@@ -271,7 +276,7 @@ class Strings(setting: Language) {
             "ach_daily30_d" to "Osiągnij passę 30 dni",
             "ach_daily100" to "Oddany",
             "ach_daily100_d" to "Osiągnij passę 100 dni",
-            "tip_controls" to "Przesuwaj palcem lub steruj joystickiem",
+            "tip_controls" to "Przesuwaj palcem lub steruj joystickiem. Mijanie aut o włos daje bonus",
             "leaderboard" to "Ranking",
             "top10_title" to "Światowy Top 10",
             "leaderboard_offline" to "Jesteś offline - ranking wymaga połączenia",
@@ -353,6 +358,11 @@ class Strings(setting: Language) {
             "ach_boosts25_d" to "Zużyj 25 boostów na start",
             "ach_powerups50" to "Łowca amuletów",
             "ach_powerups50_d" to "Zbierz na trasie 50 amuletów",
+            "near_miss" to "Blisko!",
+            "ach_nearmiss25" to "O włos",
+            "ach_nearmiss25_d" to "Minij o włos 25 aut",
+            "ach_nearmiss200" to "Na żyletkę",
+            "ach_nearmiss200_d" to "Minij o włos 200 aut",
         )
     }
 }

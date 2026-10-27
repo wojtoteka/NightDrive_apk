@@ -19,6 +19,10 @@ class Enemy(
     val hue: Int,
 ) {
     var collided = false
+    /** Was inside the near-miss band around the player at some point (see GameConfig.NEAR_MISS_PAD_X). */
+    var grazing = false
+    /** Near-miss already paid out for this car - each car counts once. */
+    var nearMissed = false
 }
 
 class Coin(
@@ -59,6 +63,7 @@ sealed interface GameEvent {
     data object CoinCollected : GameEvent
     data class PowerUpCollected(val type: PowerUpType) : GameEvent
     data object ShieldBlocked : GameEvent
+    data class NearMiss(val points: Int) : GameEvent
     data object Crash : GameEvent
     data object NewHighScore : GameEvent
     data class AchievementUnlocked(val id: String) : GameEvent
