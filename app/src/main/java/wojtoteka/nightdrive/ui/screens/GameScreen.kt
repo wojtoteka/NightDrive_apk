@@ -1,6 +1,10 @@
 package wojtoteka.nightdrive.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -52,10 +56,12 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import wojtoteka.nightdrive.domain.Achievements
 import wojtoteka.nightdrive.engine.GamePhase
 import wojtoteka.nightdrive.net.SubmitState
 import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
+import wojtoteka.nightdrive.ui.HudBanner
 import wojtoteka.nightdrive.ui.HudPowerUp
 import wojtoteka.nightdrive.ui.PadDir
 import wojtoteka.nightdrive.ui.components.Bar
@@ -76,6 +82,9 @@ import wojtoteka.nightdrive.ui.theme.NDColors
 import wojtoteka.nightdrive.ui.theme.NDType
 import kotlin.math.max
 import kotlin.math.min
+
+/** Same cyan as the near-miss sparks on the road, so the tag reads as their label. */
+private val NearMissColor = Color(0xFF37E7FF)
 
 /** Dark drop shadow so HUD text stays legible over the bright sun and neon grid, without a glow. */
 private val hudShadow = Shadow(Color(0xCC000000), Offset(0f, 2f), 6f)
@@ -115,6 +124,8 @@ fun GameScreen(vm: GameViewModel) {
             }
             // Up in the sky, left of the pause button, so it never covers the road.
             PowerUpPanel(hud.powerups, Modifier.align(Alignment.TopEnd).padding(end = 44.dp + 10.dp))
+            // Below the score row, over the sun: announcements never sit on the lanes.
+            Banner(hud.banner, hud.bannerVisible, Modifier.align(Alignment.TopCenter).padding(top = 76.dp))
         }
 
         if (!vm.hudHidden && playing) {
@@ -174,6 +185,7 @@ private fun HudLeft(vm: GameViewModel, modifier: Modifier) {
         }
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (hud.dailyRun) Tag(s["daily_run"])
             if (hud.coinsInSession > 0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CoinIcon(16)
@@ -182,13 +194,13 @@ private fun HudLeft(vm: GameViewModel, modifier: Modifier) {
                 }
             }
             if (hud.comboMultiplier > 1f) ComboTag(hud.comboMultiplier)
+            if (hud.nearMissFlash > 0) Tag("${s["near_miss"]} +${hud.nearMissFlash}", color = NearMissColor, filled = true)
         }
-        // Live daily progress for every goal type that advances mid-run (coins, combo, power-ups);
-        // the survival type only updates at crash, so it never renders here.
-        if (!hud.dailyCompleted && hud.dailyProgress > 0) {
+        // The unfinished daily mission closest to done, live as it moves.
+        hud.mission?.let { m ->
             Spacer(Modifier.height(8.dp))
             Text(
-                "${s["daily_challenge"].uppercase()}  ${hud.dailyProgress}/${hud.dailyGoal}",
+                "${s["mission"].uppercase()} · ${s[m.type.shortKey].uppercase()}  ${m.progress}/${m.goal}",
                 style = NDType.Overline.copy(shadow = hudShadow),
                 color = NDColors.TextDim,
             )
@@ -250,6 +262,31 @@ private fun PowerUpChip(pu: HudPowerUp) {
 }
 
 @Composable
+private fun Banner(banner: HudBanner?, visible: Boolean, modifier: Modifier) {
+    val s = LocalStrings.current
+    AnimatedVisibility(
+        visible = visible && banner != null,
+        modifier = modifier,
+        enter = fadeIn() + slideInVertically { -it / 2 },
+        exit = fadeOut(),
+    ) {
+        val b = banner ?: return@AnimatedVisibility
+        val color = Color(b.color)
+        Panel(fill = NDColors.PanelSolid, edge = color) {
+            Column(
+                Modifier.padding(start = 20.dp, end = 22.dp, top = 9.dp, bottom = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                val title = if (b.titleArg.isEmpty()) s[b.titleKey] else "${s[b.titleKey]} ${b.titleArg}"
+                Text(title.uppercase(), style = NDType.Title, color = color)
+                Spacer(Modifier.height(2.dp))
+                Text(s[b.subtitleKey], style = NDType.Caption, color = NDColors.TextDim)
+            }
+        }
+    }
+}
+
+@Composable
 private fun PauseOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
     Box(
@@ -273,6 +310,7 @@ private fun GameOverOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
     val hud = vm.hud
     val isRecord = hud.score > 0 && hud.score >= hud.highScore
+    val p = vm.profileState
     Box(
         Modifier
             .fillMaxSize()
@@ -294,6 +332,10 @@ private fun GameOverOverlay(vm: GameViewModel) {
                     Spacer(Modifier.width(14.dp))
                     Tag(s["new_record"].trimEnd('!'), filled = true)
                 }
+                if (hud.dailyRun) {
+                    Spacer(Modifier.width(10.dp))
+                    Tag(if (hud.dailyBestBeaten) s["daily_run_best"] else s["daily_run"], filled = hud.dailyBestBeaten)
+                }
             }
             Spacer(Modifier.height(14.dp))
             Panel(Modifier.fillMaxWidth()) {
@@ -304,7 +346,8 @@ private fun GameOverOverlay(vm: GameViewModel) {
                     Readout(s["score"], hud.score.toString(), Modifier.weight(1f), valueColor = if (isRecord) NDColors.Accent else NDColors.Text)
                     VRule(40.dp)
                     Spacer(Modifier.width(18.dp))
-                    Readout(s["high_score"], hud.highScore.toString(), Modifier.weight(1f))
+                    if (hud.dailyRun) Readout(s["daily_run_best"], p.dailyRunBestToday.toString(), Modifier.weight(1f))
+                    else Readout(s["high_score"], hud.highScore.toString(), Modifier.weight(1f))
                     VRule(40.dp)
                     Spacer(Modifier.width(18.dp))
                     Column(Modifier.weight(1f)) {
@@ -318,6 +361,9 @@ private fun GameOverOverlay(vm: GameViewModel) {
                     }
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            RunStats(vm)
+            NextGoals(vm, isRecord)
             LeaderboardEntrySection(vm)
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -329,7 +375,65 @@ private fun GameOverOverlay(vm: GameViewModel) {
     }
 }
 
-/** Game-over → offer to save the score to the online Top 10 when it qualifies. */
+/** How the run went, beyond the score: time, best combo, near misses, stage reached. */
+@Composable
+private fun RunStats(vm: GameViewModel) {
+    val s = LocalStrings.current
+    val hud = vm.hud
+    Panel(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.padding(horizontal = 18.dp, vertical = 12.dp).height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Readout(s["run_time"], formatTime(hud.runSeconds), Modifier.weight(1f), small = true)
+            VRule(30.dp)
+            Spacer(Modifier.width(14.dp))
+            Readout(s["best_streak"], hud.bestStreak.toString(), Modifier.weight(1f), small = true)
+            VRule(30.dp)
+            Spacer(Modifier.width(14.dp))
+            Readout(s["mission_nearmiss_s"], hud.nearMisses.toString(), Modifier.weight(1f), small = true)
+            VRule(30.dp)
+            Spacer(Modifier.width(14.dp))
+            Readout(s["stage"], hud.stage.toString(), Modifier.weight(1f), small = true)
+        }
+    }
+}
+
+/**
+ * What to chase next: how far the record was, and the locked achievement closest to done.
+ * Both are reasons for one more run, so they sit right above the "play again" button.
+ */
+@Composable
+private fun NextGoals(vm: GameViewModel, isRecord: Boolean) {
+    val s = LocalStrings.current
+    val hud = vm.hud
+    val p = vm.profileState
+    val recordGap = when {
+        hud.dailyRun -> if (!hud.dailyBestBeaten && p.dailyRunBestToday > hud.score) p.dailyRunBestToday - hud.score else 0
+        !isRecord && hud.highScore > hud.score -> hud.highScore - hud.score
+        else -> 0
+    }
+    val next = remember(p) {
+        Achievements.all
+            .filter { !p.unlockedAchievements.contains(it.id) }
+            .map { it to achievementProgress(it, p).coerceAtMost(it.goal) }
+            .filter { (_, progress) -> progress > 0 }
+            .maxByOrNull { (a, progress) -> progress.toFloat() / a.goal }
+    }
+    if (recordGap == 0 && next == null) return
+    Spacer(Modifier.height(10.dp))
+    if (recordGap > 0) {
+        val key = if (hud.dailyRun) "to_daily_record" else "to_record"
+        Overline(s[key].replace("%d", recordGap.toString()), color = NDColors.TextDim)
+    }
+    if (next != null) {
+        val (a, progress) = next
+        if (recordGap > 0) Spacer(Modifier.height(4.dp))
+        Overline("${s["next_goal"]}: ${s[a.nameKey]}  $progress/${a.goal}", color = NDColors.TextFaint)
+    }
+}
+
+/** Game-over → offer to save the score to the online Top 10 (or today's route board) when it qualifies. */
 @Composable
 private fun LeaderboardEntrySection(vm: GameViewModel) {
     val s = LocalStrings.current
@@ -338,21 +442,31 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
         SubmitState.Submitting -> s["submitting"] to NDColors.TextDim
         SubmitState.Failed -> s["submit_failed"] to NDColors.Danger
         SubmitState.Offline -> s["submit_offline"] to NDColors.TextFaint
-        SubmitState.Idle -> null
+        SubmitState.Unverified -> s["submit_unverified"] to NDColors.Danger
+        SubmitState.UpdateRequired -> s["update_required"] to NDColors.Danger
+        // The entry field stays open for another name (see below).
+        SubmitState.NameTaken, SubmitState.Idle -> null
     }
     if (line != null) {
         Spacer(Modifier.height(10.dp))
         Overline(line.first, color = line.second)
         return
     }
-    if (!vm.scoreQualifies) return
+    if (!vm.scoreQualifies) {
+        if (vm.hud.dailyRun) {
+            Spacer(Modifier.height(10.dp))
+            Text(s["daily_run_note"], style = NDType.Caption, color = NDColors.TextFaint)
+        }
+        return
+    }
 
     var name by remember { mutableStateOf(vm.lastNickname) }
     val submit = { if (name.trim().isNotEmpty()) vm.submitNickname(name) }
     Spacer(Modifier.height(8.dp))
     Panel(Modifier.fillMaxWidth(), edge = NDColors.Accent) {
         Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)) {
-            Overline(s["you_qualified"], color = NDColors.Accent)
+            if (vm.submitState == SubmitState.NameTaken) Overline(s["name_taken"], color = NDColors.Danger)
+            else Overline(if (vm.hud.dailyRun) s["you_qualified_daily"] else s["you_qualified"], color = NDColors.Accent)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(

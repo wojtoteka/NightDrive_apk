@@ -2,6 +2,7 @@ package wojtoteka.nightdrive.ui
 
 import androidx.compose.runtime.Immutable
 import wojtoteka.nightdrive.domain.Language
+import wojtoteka.nightdrive.domain.MissionType
 import wojtoteka.nightdrive.domain.PowerUpType
 import wojtoteka.nightdrive.engine.GamePhase
 
@@ -34,22 +35,39 @@ data class ProfileSnapshot(
     val lifetimeShieldBlocks: Int = 0,
     val lifetimeBoostsUsed: Int = 0,
     val lifetimePowerups: Int = 0,
-    val dailyType: Int = 0,
-    val dailyGoal: Int = 30,
-    val dailyProgress: Int = 0,
-    val dailyCompleted: Boolean = false,
+    val lifetimeNearMisses: Int = 0,
+    val missions: List<MissionSnapshot> = emptyList(),
+    val missionsBonusClaimed: Boolean = false,
+    val lifetimeMissions: Int = 0,
+    val dailyRunBestToday: Int = 0,
+    val dailyRunAttemptsToday: Int = 0,
+    val lifetimeDailyRuns: Int = 0,
     val dailyStreak: Int = 0,
     val bestDailyStreak: Int = 0,
     val ownedSkins: Set<String> = setOf("classic"),
     val selectedSkin: String = "classic",
     val ownedThemes: Set<String> = setOf("sunset"),
     val selectedTheme: String = "sunset",
+    val sceneryRotation: Boolean = true,
     val unlockedAchievements: Set<String> = emptySet(),
     val musicEnabled: Boolean = true,
     val sfxEnabled: Boolean = true,
     val hapticsEnabled: Boolean = true,
     val language: Language = Language.SYSTEM,
 )
+
+@Immutable
+data class MissionSnapshot(
+    val type: MissionType,
+    val goal: Int,
+    val progress: Int,
+    val completed: Boolean,
+    val reward: Int,
+)
+
+/** Slide-down notice at the top of the screen. The title may hold a %d filled from [titleArg]. */
+@Immutable
+data class Toast(val overlineKey: String, val titleKey: String, val titleArg: String = "", val detail: String = "")
 
 @Immutable
 data class HudPowerUp(
@@ -60,19 +78,32 @@ data class HudPowerUp(
     val fraction: Float,
 )
 
+/** Big announcement over the road (a late-game wave, a new stage). [color] is ARGB. */
+@Immutable
+data class HudBanner(val titleKey: String, val subtitleKey: String, val color: Long, val titleArg: String = "")
+
 /** Per-frame HUD data. Structural equality means unchanged frames cause no recomposition. */
 @Immutable
 data class HudState(
     val phase: GamePhase = GamePhase.MENU,
     val paused: Boolean = false,
+    val dailyRun: Boolean = false,
+    val dailyBestBeaten: Boolean = false,
+    // Run summary for the game-over screen
+    val runSeconds: Int = 0,
+    val bestStreak: Int = 0,
+    val nearMisses: Int = 0,
+    val stage: Int = 1,
     val score: Int = 0,
     val coinsInSession: Int = 0,
     val comboMultiplier: Float = 1f,
     val streak: Int = 0,
+    val nearMissFlash: Int = 0,
+    /** Last banner shown this run, kept after it hides so the fade-out still has its text. */
+    val banner: HudBanner? = null,
+    val bannerVisible: Boolean = false,
     val powerups: List<HudPowerUp> = emptyList(),
-    val dailyType: Int = 0,
-    val dailyGoal: Int = 30,
-    val dailyProgress: Int = 0,
-    val dailyCompleted: Boolean = false,
+    /** The unfinished daily mission closest to done (with some progress), shown under the score. */
+    val mission: MissionSnapshot? = null,
     val highScore: Int = 0,
 )

@@ -10,6 +10,10 @@ sdk.dir=C\:\Users\TwojaNazwa\AppData\Local\Android\Sdk
 NIGHTDRIVE_API_KEY=
 NIGHTDRIVE_HMAC_SECRET=
 
+# Opcjonalnie: numer projektu Google Cloud dla Play Integrity. Wersja z Google Play go nie
+# potrzebuje (Play Console laczy projekt sam), tylko buildy rozpowszechniane poza Play.
+# NIGHTDRIVE_CLOUD_PROJECT=
+
 # Opcjonalnie: lokalny serwer rankingu dla buildow debug
 # (10.0.2.2 to localhost hosta widziany z emulatora)
 # NIGHTDRIVE_DEBUG_API=http://10.0.2.2:3800

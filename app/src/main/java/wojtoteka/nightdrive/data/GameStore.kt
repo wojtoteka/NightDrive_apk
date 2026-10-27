@@ -13,6 +13,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import wojtoteka.nightdrive.domain.AchievementKind
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.Missions
 import wojtoteka.nightdrive.domain.PlayerProfile
 import wojtoteka.nightdrive.domain.Skins
 import wojtoteka.nightdrive.domain.WorldThemes
@@ -49,6 +50,7 @@ class GameStore(private val context: Context) {
             lifetimeShieldBlocks = prefs[K.lifetimeShieldBlocks] ?: 0
             lifetimeBoostsUsed = prefs[K.lifetimeBoostsUsed] ?: 0
             lifetimePowerups = prefs[K.lifetimePowerups] ?: 0
+            lifetimeNearMisses = prefs[K.lifetimeNearMisses] ?: 0
             ownedSkins = (prefs[K.ownedSkins] ?: setOf(Skins.DEFAULT_ID)).toMutableSet()
             selectedSkin = prefs[K.selectedSkin] ?: Skins.DEFAULT_ID
             ownedThemes = (prefs[K.ownedThemes] ?: setOf(WorldThemes.DEFAULT_ID)).toMutableSet()
@@ -65,15 +67,21 @@ class GameStore(private val context: Context) {
             dailyDayKey = prefs[K.dailyDay] ?: Long.MIN_VALUE
             dailyStreak = prefs[K.dailyStreak] ?: 0
             bestDailyStreak = prefs[K.bestDaily] ?: 0
-            dailyCompleted = prefs[K.dailyDone] ?: false
-            dailyProgress = prefs[K.dailyProgress] ?: 0
-            dailyGoal = prefs[K.dailyGoal] ?: 30
-            dailyType = prefs[K.dailyType] ?: 0
+            // Saves from before missions have none stored: the engine fills in today's three.
+            missions = Missions.decode(prefs[K.missions])
+            missionsBonusClaimed = prefs[K.missionsBonus] ?: false
+            lifetimeMissions = prefs[K.lifetimeMissions] ?: 0
+            dailyRunDayKey = prefs[K.dailyRunDay] ?: Long.MIN_VALUE
+            dailyRunBest = prefs[K.dailyRunBest] ?: 0
+            dailyRunAttempts = prefs[K.dailyRunAttempts] ?: 0
+            lifetimeDailyRuns = prefs[K.lifetimeDailyRuns] ?: 0
+            sceneryRotation = prefs[K.sceneryRotation] ?: true
             musicEnabled = prefs[K.music] ?: true
             sfxEnabled = prefs[K.sfx] ?: true
             hapticsEnabled = prefs[K.haptics] ?: true
             language = prefs[K.language] ?: "system"
             playerName = prefs[K.playerName] ?: ""
+            playerId = prefs[K.playerId] ?: ""
             // Keep the owned sets consistent with the free defaults.
             if (!ownedSkins.contains(Skins.DEFAULT_ID)) ownedSkins.add(Skins.DEFAULT_ID)
             if (!ownedThemes.contains(WorldThemes.DEFAULT_ID)) ownedThemes.add(WorldThemes.DEFAULT_ID)
@@ -101,6 +109,7 @@ class GameStore(private val context: Context) {
             e[K.lifetimeShieldBlocks] = p.lifetimeShieldBlocks
             e[K.lifetimeBoostsUsed] = p.lifetimeBoostsUsed
             e[K.lifetimePowerups] = p.lifetimePowerups
+            e[K.lifetimeNearMisses] = p.lifetimeNearMisses
             e[K.ownedSkins] = p.ownedSkins
             e[K.selectedSkin] = p.selectedSkin
             e[K.ownedThemes] = p.ownedThemes
@@ -109,15 +118,25 @@ class GameStore(private val context: Context) {
             e[K.dailyDay] = p.dailyDayKey
             e[K.dailyStreak] = p.dailyStreak
             e[K.bestDaily] = p.bestDailyStreak
-            e[K.dailyDone] = p.dailyCompleted
-            e[K.dailyProgress] = p.dailyProgress
-            e[K.dailyGoal] = p.dailyGoal
-            e[K.dailyType] = p.dailyType
+            e[K.missions] = Missions.encode(p.missions)
+            e[K.missionsBonus] = p.missionsBonusClaimed
+            e[K.lifetimeMissions] = p.lifetimeMissions
+            e[K.dailyRunDay] = p.dailyRunDayKey
+            e[K.dailyRunBest] = p.dailyRunBest
+            e[K.dailyRunAttempts] = p.dailyRunAttempts
+            e[K.lifetimeDailyRuns] = p.lifetimeDailyRuns
+            // The single daily challenge from before 3.6 is gone for good.
+            e.remove(K.legacyDailyDone)
+            e.remove(K.legacyDailyProgress)
+            e.remove(K.legacyDailyGoal)
+            e.remove(K.legacyDailyType)
+            e[K.sceneryRotation] = p.sceneryRotation
             e[K.music] = p.musicEnabled
             e[K.sfx] = p.sfxEnabled
             e[K.haptics] = p.hapticsEnabled
             e[K.language] = p.language
             e[K.playerName] = p.playerName
+            if (p.playerId.isNotEmpty()) e[K.playerId] = p.playerId
         }
     }
 
@@ -142,13 +161,18 @@ class GameStore(private val context: Context) {
         p.lifetimeShieldBlocks = 0
         p.lifetimeBoostsUsed = 0
         p.lifetimePowerups = 0
+        p.lifetimeNearMisses = 0
         p.ownedSkins = mutableSetOf(Skins.DEFAULT_ID)
         p.selectedSkin = Skins.DEFAULT_ID
         p.ownedThemes = mutableSetOf(WorldThemes.DEFAULT_ID)
         p.selectedTheme = WorldThemes.DEFAULT_ID
         p.unlockedAchievements = mutableSetOf()
-        p.dailyCompleted = false
-        p.dailyProgress = 0
+        p.missions = if (p.dailyDayKey != Long.MIN_VALUE) Missions.forDay(p.dailyDayKey) else mutableListOf()
+        p.missionsBonusClaimed = false
+        p.lifetimeMissions = 0
+        p.dailyRunBest = 0
+        p.dailyRunAttempts = 0
+        p.lifetimeDailyRuns = 0
         save(p)
     }
 
@@ -173,6 +197,7 @@ class GameStore(private val context: Context) {
         val lifetimeShieldBlocks = intPreferencesKey("lifetime_shield_blocks")
         val lifetimeBoostsUsed = intPreferencesKey("lifetime_boosts_used")
         val lifetimePowerups = intPreferencesKey("lifetime_powerups")
+        val lifetimeNearMisses = intPreferencesKey("lifetime_near_misses")
         val ownedSkins = stringSetPreferencesKey("owned_skins")
         val selectedSkin = stringPreferencesKey("selected_skin")
         val ownedThemes = stringSetPreferencesKey("owned_themes")
@@ -181,14 +206,23 @@ class GameStore(private val context: Context) {
         val dailyDay = longPreferencesKey("daily_day")
         val dailyStreak = intPreferencesKey("daily_streak")
         val bestDaily = intPreferencesKey("best_daily_streak")
-        val dailyDone = booleanPreferencesKey("daily_completed")
-        val dailyProgress = intPreferencesKey("daily_progress")
-        val dailyGoal = intPreferencesKey("daily_goal")
-        val dailyType = intPreferencesKey("daily_type")
+        val missions = stringPreferencesKey("daily_missions")
+        val missionsBonus = booleanPreferencesKey("daily_missions_bonus")
+        val lifetimeMissions = intPreferencesKey("lifetime_missions")
+        val dailyRunDay = longPreferencesKey("daily_run_day")
+        val dailyRunBest = intPreferencesKey("daily_run_best")
+        val dailyRunAttempts = intPreferencesKey("daily_run_attempts")
+        val lifetimeDailyRuns = intPreferencesKey("lifetime_daily_runs")
+        val legacyDailyDone = booleanPreferencesKey("daily_completed")
+        val legacyDailyProgress = intPreferencesKey("daily_progress")
+        val legacyDailyGoal = intPreferencesKey("daily_goal")
+        val legacyDailyType = intPreferencesKey("daily_type")
+        val sceneryRotation = booleanPreferencesKey("scenery_rotation")
         val music = booleanPreferencesKey("music_enabled")
         val sfx = booleanPreferencesKey("sfx_enabled")
         val haptics = booleanPreferencesKey("haptics_enabled")
         val language = stringPreferencesKey("language")
         val playerName = stringPreferencesKey("player_name")
+        val playerId = stringPreferencesKey("player_id")
     }
 }

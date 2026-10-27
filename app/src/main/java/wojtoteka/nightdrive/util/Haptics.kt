@@ -31,6 +31,16 @@ class Haptics(context: Context) {
     fun heavy() = oneShot(100, 255)
     fun success() = pattern(longArrayOf(0, 30, 70, 50))
 
+    /** Two quick taps: something is coming that isn't on screen yet (a speeder). */
+    fun warning() = pattern(longArrayOf(0, 22, 60, 22))
+
+    /** Reaching combo tier [tier] (1-4): the higher the tier, the stronger the bump. */
+    fun comboTier(tier: Int) = when {
+        tier >= 4 -> pattern(longArrayOf(0, 35, 50, 45))
+        tier == 3 -> medium()
+        else -> light()
+    }
+
     private fun oneShot(ms: Long, amplitude: Int, rumble: Boolean = true) {
         if (!enabled) return
         vibrator?.let { vibrateOne(it, ms, amplitude) }

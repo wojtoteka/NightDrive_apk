@@ -17,10 +17,11 @@ class PlayerProfile {
     var longestStreakTimeSec: Int = 0
     var shieldCharges: Int = 0         // carried between runs, max 5
 
-    // Lifetime counters feeding the SHIELD_BLOCK / BOOST_USED / POWERUP_COLLECT achievements.
+    // Lifetime counters feeding the SHIELD_BLOCK / BOOST_USED / POWERUP_COLLECT / NEAR_MISS achievements.
     var lifetimeShieldBlocks: Int = 0
     var lifetimeBoostsUsed: Int = 0
     var lifetimePowerups: Int = 0
+    var lifetimeNearMisses: Int = 0
 
     // Starter boosts bought in the shop: stock of one-shot activations consumed at the start
     // of the next run (one of each kind per run), on top of the normal in-run random spawns.
@@ -62,16 +63,22 @@ class PlayerProfile {
     // Achievements (ids of unlocked ones)
     var unlockedAchievements: MutableSet<String> = mutableSetOf()
 
-    // Daily challenge
+    // Daily missions (see Missions): three per UTC day, plus a bonus for finishing all of them
     var dailyDayKey: Long = Long.MIN_VALUE
     var dailyStreak: Int = 0
     var bestDailyStreak: Int = 0
-    var dailyCompleted: Boolean = false
-    var dailyProgress: Int = 0
-    var dailyGoal: Int = 30
-    var dailyType: Int = 0             // 0 = collect coins, 1 = survive seconds
+    var missions: MutableList<DailyMission> = mutableListOf()
+    var missionsBonusClaimed: Boolean = false
+    var lifetimeMissions: Int = 0
+
+    // Daily route: today's best and number of attempts (reset when the day changes)
+    var dailyRunDayKey: Long = Long.MIN_VALUE
+    var dailyRunBest: Int = 0
+    var dailyRunAttempts: Int = 0
+    var lifetimeDailyRuns: Int = 0
 
     // Settings
+    var sceneryRotation: Boolean = true   // cycle owned world themes stage by stage during a run
     var musicEnabled: Boolean = true
     var sfxEnabled: Boolean = true
     var hapticsEnabled: Boolean = true
@@ -79,6 +86,10 @@ class PlayerProfile {
 
     // Last nickname used for the online leaderboard (pre-fills the entry field)
     var playerName: String = ""
+
+    // Random id of this install, sent with scores so the server knows who owns a nickname.
+    // Survives "reset progress" (it isn't progress) and travels with backup/restore.
+    var playerId: String = ""
 
     fun ownsSkin(id: String): Boolean = ownedSkins.contains(id)
 
@@ -102,6 +113,7 @@ class PlayerProfile {
         lifetimeShieldBlocks = other.lifetimeShieldBlocks
         lifetimeBoostsUsed = other.lifetimeBoostsUsed
         lifetimePowerups = other.lifetimePowerups
+        lifetimeNearMisses = other.lifetimeNearMisses
         ownedSkins = other.ownedSkins.toMutableSet()
         selectedSkin = other.selectedSkin
         ownedThemes = other.ownedThemes.toMutableSet()
@@ -110,14 +122,19 @@ class PlayerProfile {
         dailyDayKey = other.dailyDayKey
         dailyStreak = other.dailyStreak
         bestDailyStreak = other.bestDailyStreak
-        dailyCompleted = other.dailyCompleted
-        dailyProgress = other.dailyProgress
-        dailyGoal = other.dailyGoal
-        dailyType = other.dailyType
+        missions = other.missions.map { DailyMission(it.type, it.goal, it.reward, it.progress, it.completed) }.toMutableList()
+        missionsBonusClaimed = other.missionsBonusClaimed
+        lifetimeMissions = other.lifetimeMissions
+        dailyRunDayKey = other.dailyRunDayKey
+        dailyRunBest = other.dailyRunBest
+        dailyRunAttempts = other.dailyRunAttempts
+        lifetimeDailyRuns = other.lifetimeDailyRuns
+        sceneryRotation = other.sceneryRotation
         musicEnabled = other.musicEnabled
         sfxEnabled = other.sfxEnabled
         hapticsEnabled = other.hapticsEnabled
         language = other.language
         playerName = other.playerName
+        playerId = other.playerId
     }
 }

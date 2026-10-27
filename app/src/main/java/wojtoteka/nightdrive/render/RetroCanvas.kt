@@ -49,6 +49,16 @@ class RenderCache {
         return roundStrokes.getOrPut(width) { Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round) }
     }
 
+    private data class HGradientKey(val left: Long, val right: Long, val startX: Float, val endX: Float)
+    private val hGradients = HashMap<HGradientKey, Brush>()
+
+    fun horizontalGradient(left: Long, right: Long, startX: Float, endX: Float): Brush {
+        if (hGradients.size > 16) hGradients.clear()
+        return hGradients.getOrPut(HGradientKey(left, right, startX, endX)) {
+            Brush.horizontalGradient(listOf(Color(left), Color(right)), startX = startX, endX = endX)
+        }
+    }
+
     private data class GradientKey(val top: Long, val bottom: Long, val startY: Float, val endY: Float)
     private val gradients = HashMap<GradientKey, Brush>()
 
@@ -151,6 +161,18 @@ class RetroCanvas(
         gradY: Float, gradH: Float, topColor: Long, bottomColor: Long,
     ) {
         val brush = cache.verticalGradient(topColor, bottomColor, sy(gradY + gradH / 2f), sy(gradY - gradH / 2f))
+        ds.drawRect(brush, Offset(sx(x - w / 2f), sy(y + h / 2f)), Size(w * unit, h * unit), alpha, blendMode = blend)
+    }
+
+    /**
+     * Horizontal gradient rectangle in world coords. The colour ramp runs from world x [gradX0] to
+     * [gradX1] and holds the end colours beyond them.
+     */
+    fun fillHorizontalGradient(
+        x: Float, y: Float, w: Float, h: Float,
+        gradX0: Float, gradX1: Float, leftColor: Long, rightColor: Long,
+    ) {
+        val brush = cache.horizontalGradient(leftColor, rightColor, sx(gradX0), sx(gradX1))
         ds.drawRect(brush, Offset(sx(x - w / 2f), sy(y + h / 2f)), Size(w * unit, h * unit), alpha, blendMode = blend)
     }
 

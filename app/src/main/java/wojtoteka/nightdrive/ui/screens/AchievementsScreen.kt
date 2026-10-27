@@ -132,7 +132,8 @@ private fun AchievementCard(a: Achievement, p: ProfileSnapshot, unlocked: Boolea
     }
 }
 
-private fun achievementProgress(a: Achievement, p: ProfileSnapshot): Int = when (a.kind) {
+/** Where [a] stands for profile [p], in the units of its goal. Also feeds the game-over hint. */
+internal fun achievementProgress(a: Achievement, p: ProfileSnapshot): Int = when (a.kind) {
     AchievementKind.TOTAL_COINS -> p.lifetimeCoins
     AchievementKind.SCORE -> p.highScore
     AchievementKind.STREAK -> p.longestStreak
@@ -142,4 +143,7 @@ private fun achievementProgress(a: Achievement, p: ProfileSnapshot): Int = when 
     AchievementKind.SHIELD_BLOCK -> p.lifetimeShieldBlocks
     AchievementKind.BOOST_USED -> p.lifetimeBoostsUsed
     AchievementKind.POWERUP_COLLECT -> p.lifetimePowerups
+    AchievementKind.NEAR_MISS -> p.lifetimeNearMisses
+    AchievementKind.MISSIONS -> p.lifetimeMissions
+    AchievementKind.DAILY_RUNS -> p.lifetimeDailyRuns
 }

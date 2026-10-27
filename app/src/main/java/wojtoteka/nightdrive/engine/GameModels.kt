@@ -1,6 +1,13 @@
 package wojtoteka.nightdrive.engine
 
+import wojtoteka.nightdrive.domain.MissionType
 import wojtoteka.nightdrive.domain.PowerUpType
+
+/**
+ * STANDARD is the normal endless run. DAILY is the daily route: the same seed for every player on
+ * a given UTC day, and equal chances - no garage shield, no starter boosts, no duration upgrades.
+ */
+enum class RunMode { STANDARD, DAILY }
 
 /** High-level phase of the simulation. Menu/shop/etc. navigation lives in the UI layer. */
 enum class GamePhase { MENU, INTRO, PLAYING, GAME_OVER }
@@ -12,13 +19,31 @@ class Player {
     var bounce = 0f
 }
 
+/**
+ * Traffic variety. Plain cars are the original enemy; the others unlock as a run goes on:
+ * trucks are long and slow, lane changers blink and drift into the next lane once on screen,
+ * speeders come in very fast but are announced by a flashing marker at the right edge.
+ */
+enum class EnemyKind { CAR, TRUCK, LANE_CHANGER, SPEEDER }
+
 class Enemy(
     var x: Float,
     var y: Float,
     var speed: Float,
     val hue: Int,
+    val kind: EnemyKind = EnemyKind.CAR,
+    /** Lane a [EnemyKind.LANE_CHANGER] drifts to; equals [y] for every other kind. */
+    var targetY: Float = y,
 ) {
+    /** Body length relative to a plain car; scales both the drawing and the hitbox. */
+    val length: Float get() = if (kind == EnemyKind.TRUCK) GameConfig.TRUCK_LENGTH else 1f
+    val changingLane: Boolean get() = kind == EnemyKind.LANE_CHANGER && y != targetY
+
     var collided = false
+    /** Was inside the near-miss band around the player at some point (see GameConfig.NEAR_MISS_PAD_X). */
+    var grazing = false
+    /** Near-miss already paid out for this car - each car counts once. */
+    var nearMissed = false
 }
 
 class Coin(
@@ -38,6 +63,13 @@ class PowerUp(
 ) {
     var collected = false
 }
+
+/**
+ * Late-game events that start after [GameConfig.WAVES_START_MS] of a run: a convoy is a wall of
+ * cars across the road with one lane left open, fog hides the right part of the road so traffic
+ * shows up late.
+ */
+enum class WaveKind { CONVOY, FOG }
 
 /** Parallax background star. */
 class Star(var x: Float, var y: Float)
@@ -59,7 +91,17 @@ sealed interface GameEvent {
     data object CoinCollected : GameEvent
     data class PowerUpCollected(val type: PowerUpType) : GameEvent
     data object ShieldBlocked : GameEvent
+    data class NearMiss(val points: Int) : GameEvent
+    data class WaveStarted(val kind: WaveKind) : GameEvent
+    /** A new stage of the run began; [stage] is 1 for the second minute, 2 for the third... */
+    data class StageReached(val stage: Int) : GameEvent
     data object Crash : GameEvent
+    /** The run passed the previous best (only when there was one to beat). */
     data object NewHighScore : GameEvent
+    data class ComboTierUp(val tier: Int) : GameEvent
+    /** A speeder just spawned off screen; its edge marker is about to start flashing. */
+    data object SpeederIncoming : GameEvent
     data class AchievementUnlocked(val id: String) : GameEvent
+    data class MissionCompleted(val type: MissionType, val goal: Int, val reward: Int) : GameEvent
+    data class AllMissionsCompleted(val bonus: Int) : GameEvent
 }

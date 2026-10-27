@@ -32,6 +32,9 @@ enum class AchievementKind {
     SHIELD_BLOCK,      // lifetime collisions blocked by the shield
     BOOST_USED,        // lifetime starter boosts consumed at run start
     POWERUP_COLLECT,   // lifetime power-ups picked up on the road
+    NEAR_MISS,         // lifetime cars passed by a hair
+    MISSIONS,          // lifetime daily missions completed
+    DAILY_RUNS,        // lifetime daily-route runs driven
 }
 
 data class Achievement(
@@ -65,6 +68,10 @@ object Achievements {
         Achievement("shield25", "ach_shield25", "ach_shield25_d", 25, AchievementKind.SHIELD_BLOCK, 75),
         Achievement("boosts25", "ach_boosts25", "ach_boosts25_d", 25, AchievementKind.BOOST_USED, 60),
         Achievement("powerups50", "ach_powerups50", "ach_powerups50_d", 50, AchievementKind.POWERUP_COLLECT, 50),
+        Achievement("nearmiss25", "ach_nearmiss25", "ach_nearmiss25_d", 25, AchievementKind.NEAR_MISS, 20),
+        Achievement("nearmiss200", "ach_nearmiss200", "ach_nearmiss200_d", 200, AchievementKind.NEAR_MISS, 100),
+        Achievement("missions30", "ach_missions30", "ach_missions30_d", 30, AchievementKind.MISSIONS, 75),
+        Achievement("dailyrun10", "ach_dailyrun10", "ach_dailyrun10_d", 10, AchievementKind.DAILY_RUNS, 40),
     )
 }
 
@@ -86,7 +93,7 @@ enum class PowerUpType(val id: String, val labelKey: String, val durationMs: Lon
     }
 }
 
-/** Price of one shield charge in the shop, either bought outright or claimed via a rewarded ad. */
+/** Price of one shield charge in the shop. */
 const val SHIELD_PRICE = 60
 
 /** One-time permanent purchase: raises the shield charge cap (see [PlayerProfile.shieldMax]). */
@@ -206,4 +213,14 @@ object WorldThemes {
     )
 
     fun byId(id: String): WorldTheme = all.firstOrNull { it.id == id } ?: all.first()
+
+    /**
+     * The themes a run cycles through, one per stage: every owned theme in catalog order, starting
+     * from the selected one. With a single owned theme the world never changes.
+     */
+    fun rotation(owned: Set<String>, selected: String): List<WorldTheme> {
+        val mine = all.filter { owned.contains(it.id) }.ifEmpty { listOf(all.first()) }
+        val start = mine.indexOfFirst { it.id == selected }.coerceAtLeast(0)
+        return mine.drop(start) + mine.take(start)
+    }
 }

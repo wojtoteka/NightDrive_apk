@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import wojtoteka.nightdrive.net.Board
 import wojtoteka.nightdrive.net.LeaderboardEntry
 import wojtoteka.nightdrive.net.LeaderboardState
 import wojtoteka.nightdrive.ui.Destination
@@ -31,6 +32,7 @@ import wojtoteka.nightdrive.ui.components.Panel
 import wojtoteka.nightdrive.ui.components.Rule
 import wojtoteka.nightdrive.ui.components.ScreenHeader
 import wojtoteka.nightdrive.ui.components.SecondaryButton
+import wojtoteka.nightdrive.ui.components.SegmentedControl
 import wojtoteka.nightdrive.ui.components.StateMessage
 import wojtoteka.nightdrive.ui.theme.LocalStrings
 import wojtoteka.nightdrive.ui.theme.NDColors
@@ -53,7 +55,14 @@ fun LeaderboardScreen(vm: GameViewModel) {
             title = s["leaderboard"],
             onBack = { vm.goTo(Destination.MENU) },
             backLabel = s["back"],
-            trailing = { Overline(s["top10_title"], color = NDColors.TextDim) },
+            trailing = {
+                val boards = listOf(Board.GLOBAL, Board.DAILY)
+                SegmentedControl(
+                    options = listOf(s["board_global"], s["board_daily"]),
+                    selectedIndex = boards.indexOf(vm.leaderboardBoard),
+                    onSelect = { vm.selectBoard(boards[it]) },
+                )
+            },
         )
         Spacer(Modifier.height(Space.section))
 
@@ -67,7 +76,9 @@ fun LeaderboardScreen(vm: GameViewModel) {
                     SecondaryButton(s["retry"], { vm.fetchLeaderboard() })
                 }
                 is LeaderboardState.Success ->
-                    if (st.entries.isEmpty()) StateMessage(s["leaderboard_empty"])
+                    if (st.entries.isEmpty()) {
+                        StateMessage(s[if (vm.leaderboardBoard == Board.DAILY) "daily_board_empty" else "leaderboard_empty"])
+                    }
                     else Board(st.entries)
             }
         }

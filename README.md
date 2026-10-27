@@ -21,15 +21,33 @@ gdy zmieniła się architektura wokół.
 i cały HUD kształtami Compose'a. Efekt jest wektorowy, skaluje się na każdy ekran i waży tyle,
 co nic.
 
-**Deterministyczna losowość.** Osobny `Rng`, żeby przebieg dało się odtworzyć i przetestować.
+**Deterministyczna losowość.** Rozgrywka losuje z osobnych strumieni `Rng` (ruch, monety,
+power-upy, fale), a kosmetyka z własnego. Dzięki temu przebieg da się odtworzyć i przetestować,
+a trasa dnia jest identyczna u wszystkich graczy.
+
+**Rozgrywka.** Mijanie aut o włos (near-miss) daje punkty i podtrzymuje combo. Ruch z czasem
+gęstnieje i się różnicuje: ciężarówki, auta zmieniające pas z kierunkowskazem i piraci drogowi
+zapowiadani strzałkami przy krawędzi ekranu. Po dwóch minutach przychodzą fale - konwój z jedną
+luką albo mgła. Co minutę zaczyna się nowy etap, a kupione motywy świata zmieniają się po kolei
+z płynnym przejściem. Muzyka reaguje na jazdę: narasta z combo, zwalnia w slow-mo, cichnie
+po kraksie.
+
+**Codzienne granie.** Trzy misje dnia (łatwa, średnia, trudna) z nagrodami i bonusem za komplet
+oraz trasa dnia - ta sama dla wszystkich, bez tarczy z garażu i boostów, z własnym rankingiem
+online.
+Ekran końca gry podsumowuje bieg i podpowiada, ile zabrakło do rekordu i które osiągnięcie
+jest najbliżej.
 
 **Sklep i progresja.** Skiny aut kupowane za monety, power-upy (magnes, slow-mo, podwojenie,
 deszcz monet) z trójstopniowymi ulepszeniami czasu trwania - osobno albo pakietem.
-Do tego 21 osiągnięć z nagrodami w monetach.
+Do tego 24 osiągnięcia z nagrodami w monetach.
 
-**Ranking online.** Wyniki idą na własne API i są podpisywane HMAC-SHA256, więc serwer odrzuca
-spreparowane zgłoszenia. Klucz i sekret nie leżą w kodzie - build wciąga je z `local.properties`.
-Bez internetu gra działa w całości offline.
+**Ranking online.** Top 10 wszech czasów i Top 10 trasy dnia na własnym API. Zgłoszenie jest
+podpisane HMAC-SHA256 razem z wersją gry, skrótem certyfikatu, którym podpisano APK, i losowym id
+instalacji (do niego przypisany jest nick, więc nikt nie nadpisze cudzego wpisu). Dochodzi do tego
+token Google Play Integrity, którego zmodowana wersja gry nie podrobi - serwer może dzięki temu
+nie wpuszczać do rankingu przerobionych kopii. Klucz i sekret nie leżą w kodzie - build wciąga je
+z `local.properties`. Bez internetu gra działa w całości offline.
 
 **Bez reklam.** Żadnego SDK reklamowego, żadnych zgód UMP - gra nie wysyła nic poza wynikami
 do rankingu.

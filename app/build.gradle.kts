@@ -24,6 +24,9 @@ fun secret(name: String, fallback: String): String {
 
 val ndApiKey = secret("NIGHTDRIVE_API_KEY", "change-me-api-key")
 val ndHmacSecret = secret("NIGHTDRIVE_HMAC_SECRET", "change-me-hmac-secret")
+// Google Cloud project number for Play Integrity. Optional for the Play build (Play Console links
+// the project); only builds distributed outside Play need it.
+val ndCloudProject = secret("NIGHTDRIVE_CLOUD_PROJECT", "0").toLongOrNull() ?: 0L
 
 android {
     namespace = "wojtoteka.nightdrive"
@@ -33,14 +36,15 @@ android {
         applicationId = "wojtoteka.nightdrive"
         minSdk = 24
         targetSdk = 36
-        versionCode = 26
-        versionName = "3.5"
+        versionCode = 27
+        versionName = "3.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
         buildConfigField("String", "API_KEY", "\"$ndApiKey\"")
         buildConfigField("String", "LEADERBOARD_SECRET", "\"$ndHmacSecret\"")
+        buildConfigField("long", "PLAY_CLOUD_PROJECT", "${ndCloudProject}L")
     }
 
     buildTypes {
@@ -99,6 +103,8 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.okhttp)
+    // Play Integrity: lets the ranking server tell the real Play build from a modified one.
+    implementation(libs.play.integrity)
     // Installs the merged baseline profile (ours + Compose's) on first run, so ART can AOT-compile
     // the startup path instead of JIT-ing it every cold start. Compose pulls this in transitively
     // already; the explicit dependency pins the newer version and documents that we rely on it.

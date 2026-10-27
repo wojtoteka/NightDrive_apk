@@ -83,9 +83,9 @@ private fun LoadingOverlay() {
 @Composable
 private fun AchievementToast(vm: GameViewModel, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
-    val key by remember { androidx.compose.runtime.derivedStateOf { vm.achievementToastKey } }
+    val toast by remember { androidx.compose.runtime.derivedStateOf { vm.toast } }
     AnimatedVisibility(
-        visible = key != null,
+        visible = toast != null,
         enter = slideInVertically { -it } + fadeIn(),
         exit = slideOutVertically { -it } + fadeOut(),
         modifier = modifier
@@ -94,9 +94,11 @@ private fun AchievementToast(vm: GameViewModel, modifier: Modifier = Modifier) {
     ) {
         Panel(fill = NDColors.PanelSolid, edge = NDColors.Accent) {
             Column(Modifier.padding(start = 20.dp, end = 22.dp, top = 10.dp, bottom = 11.dp)) {
-                Overline(strings["achievement_unlocked"], color = NDColors.Accent)
+                val t = toast
+                val overline = t?.let { if (it.detail.isEmpty()) strings[it.overlineKey] else "${strings[it.overlineKey]} · ${it.detail}" }
+                Overline(overline ?: "", color = NDColors.Accent)
                 Spacer(Modifier.height(3.dp))
-                Text(key?.let { strings[it] } ?: "", style = NDType.Heading, color = NDColors.Text)
+                Text(t?.let { strings[it.titleKey].replace("%d", it.titleArg) } ?: "", style = NDType.Heading, color = NDColors.Text)
             }
         }
     }

@@ -3,6 +3,9 @@ package wojtoteka.nightdrive.engine
 import wojtoteka.nightdrive.domain.Achievement
 import wojtoteka.nightdrive.domain.AchievementKind
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.DailyMission
+import wojtoteka.nightdrive.domain.MissionType
+import wojtoteka.nightdrive.domain.Missions
 import wojtoteka.nightdrive.domain.PlayerProfile
 import wojtoteka.nightdrive.domain.PowerUpType
 import wojtoteka.nightdrive.engine.GameConfig as C
@@ -19,8 +22,29 @@ import kotlin.math.sin
  */
 class GameEngine(
     val profile: PlayerProfile,
+    /** Cosmetic randomness (particles, stars) and the seed source for standard runs. */
     private val rng: Rng = Rng(),
 ) {
+    // Gameplay randomness, one stream per spawner and reseeded every run (see [seedRun]). Separate
+    // streams keep each sequence fixed no matter how the spawners interleave, so a daily route
+    // plays out the same for everyone even though spawn timing reacts to the score.
+    private var trafficRng = Rng()
+    private var coinRng = Rng()
+    private var powerupRng = Rng()
+    private var waveRng = Rng()
+
+    var mode: RunMode = RunMode.STANDARD; private set
+    private var runDayKey = 0L
+    /** UTC day number this run started on (the daily route's day and its ranking). */
+    val runDay: Long get() = runDayKey
+    /** The daily route's shield: starts empty, filled only by pickups, never saved. */
+    private var runShieldCharges = 0
+    /** This daily-route run beat the day's best so far. */
+    var dailyBestBeaten = false; private set
+
+    /** Shield charges in play: the garage stock normally, the run-local count on the daily route. */
+    val shieldCharges: Int get() = if (mode == RunMode.DAILY) runShieldCharges else profile.shieldCharges
+
     // Viewport (virtual units). Width depends on device aspect ratio.
     var halfWidth: Float = 222f
         private set
@@ -49,6 +73,19 @@ class GameEngine(
     var globalTime = 0f; private set
     var difficulty = 0; private set
     var gameOverSlide = 0f; private set   // b_y in the original: game-over panel slide-in
+    var nearMissesInRun = 0; private set
+    var bestStreakInRun = 0; private set
+    var powerupsInRun = 0; private set
+    var wavesInRun = 0; private set
+    /** The shield has blocked a hit this run (ends the "clean run" mission's count). */
+    private var shieldUsedInRun = false
+    var stage = 0; private set
+
+    /** Time spent in the current [stage] (drives the theme cross-fade). */
+    val stageElapsedMs: Long get() = (clockMs - streakStartMs - stage * C.STAGE_MS).coerceAtLeast(0L)
+    val stageBannerVisible: Boolean get() = stage > 0 && stageElapsedMs < C.WAVE_BANNER_MS
+    private var lastNearMissMs = 0L
+    private var lastNearMissPoints = 0
 
     // Power-up runtime
     var magnetActive = false; private set
@@ -74,6 +111,7 @@ class GameEngine(
     private var powerupSpawnDelay = 0f
     private var bounce = 0f
     private var newHighAnnounced = false
+    private var highScoreAtStart = 0
     // Coin-earning starter boosts (magnet/double/coin rush) arm at run start but fire on the FIRST
     // collected coin - the opening seconds have no coins, so firing immediately would waste them.
     // The slow-motion starter is defensive, not coin-driven: it activates right at run start.
@@ -85,6 +123,25 @@ class GameEngine(
     private var doubleDurMs = 1L
     private var coinRushDurMs = 1L
 
+    // Late-game waves
+    var wave: WaveKind? = null; private set
+    private var lastWave: WaveKind? = null
+    private var waveStartMs = 0L
+    private var waveEndMs = 0L
+    private var nextWaveRunMs = C.WAVES_START_MS
+
+    /** Fog density 0..1 for the renderer: fades in and out over [C.FOG_FADE_MS]. */
+    val fogAmount: Float
+        get() {
+            if (wave != WaveKind.FOG) return 0f
+            val edge = min(clockMs - waveStartMs, waveEndMs - clockMs).coerceAtLeast(0L)
+            return min(1f, edge.toFloat() / C.FOG_FADE_MS)
+        }
+
+    /** The wave the HUD should be announcing right now, if any. */
+    val waveBanner: WaveKind?
+        get() = if (lastWave != null && clockMs - waveStartMs < C.WAVE_BANNER_MS) lastWave else null
+
     // Input intents (set each frame by the UI)
     private var inLeft = false
     private var inRight = false
@@ -95,6 +152,10 @@ class GameEngine(
 
     val survivalSeconds: Int get() = ((clockMs - streakStartMs) / 1000L).toInt().coerceAtLeast(0)
     val comboMultiplier: Float get() = C.comboMultiplier(streak)
+
+    /** Points of the latest near-miss while its HUD tag is still showing, otherwise 0. */
+    val nearMissFlash: Int
+        get() = if (nearMissesInRun > 0 && clockMs - lastNearMissMs < C.NEAR_MISS_FLASH_MS) lastNearMissPoints else 0
     fun nowMs(): Long = clockMs
 
     init { buildStars() }
@@ -114,31 +175,51 @@ class GameEngine(
         enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         player.x = -halfWidth - C.PLAYER_START_X_MARGIN
         player.y = C.PLAYER_START_Y
+        stage = 0
         refreshDaily(realNowMs)
     }
 
-    fun startRun(realNowMs: Long) {
+    fun startRun(realNowMs: Long, mode: RunMode = RunMode.STANDARD) {
         refreshDaily(realNowMs)
+        this.mode = mode
+        runDayKey = realNowMs / C.DAY_MS
+        seedRun(if (mode == RunMode.DAILY) dailySeed(runDayKey) else rng.nextLong())
+        runShieldCharges = 0
+        dailyBestBeaten = false
         enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         score = 0; coinsInSession = 0; streak = 0; globalTime = 0f; difficulty = 0
         magnetActive = false; slowmoActive = false; doubleActive = false; coinRushActive = false
         newHighAnnounced = false
+        highScoreAtStart = profile.highScore
+        nearMissesInRun = 0; lastNearMissMs = 0L; lastNearMissPoints = 0
+        bestStreakInRun = 0; powerupsInRun = 0
+        wave = null; lastWave = null; wavesInRun = 0; nextWaveRunMs = C.WAVES_START_MS
+        stage = 0; streakStartMs = 0L
+        shieldUsedInRun = false
         clockMs = 0L; clockFrac = 0f; enemyTimer = 0L; coinTimer = 0L; powerupTimer = 0L; lastCoinMs = 0L
         enemySpawnDelay = C.ENEMY_START_DELAY_MS
         coinSpawnDelay = 0f
-        powerupSpawnDelay = rng.intInRange(C.POWERUP_SPAWN_MIN_MS, C.POWERUP_SPAWN_MAX_MS).toFloat()
+        powerupSpawnDelay = powerupRng.intInRange(C.POWERUP_SPAWN_MIN_MS, C.POWERUP_SPAWN_MAX_MS).toFloat()
         player.x = -halfWidth - C.PLAYER_START_X_MARGIN
         player.y = C.PLAYER_START_Y
         player.z = 0f
         phase = GamePhase.INTRO
-        starterBoostsPending = true
+        // The daily route is equal chances: purchased starters stay in stock for a normal run.
+        starterBoostsPending = mode == RunMode.STANDARD
         // The slow-motion starter is an "easier warm-up": it covers the run from second zero.
         // The virtual clock is frozen during the drive-in intro, so none of it is wasted there.
-        if (profile.pendingSlowmoStarts > 0) {
+        if (mode == RunMode.STANDARD && profile.pendingSlowmoStarts > 0) {
             profile.pendingSlowmoStarts--
             profile.lifetimeBoostsUsed++
             applyTimed(PowerUpType.SLOWMO, starterDuration(PowerUpType.SLOWMO))
         }
+    }
+
+    private fun seedRun(seed: Long) {
+        trafficRng = Rng(seed)
+        coinRng = Rng(seed xor 0x2545F4914F6CDD1DL)
+        powerupRng = Rng(seed xor 0x6A09E667F3BCC909L)
+        waveRng = Rng(seed xor 0x3C6EF372FE94F82BL)
     }
 
     /** Applies one of each purchased coin-earning starter boost, if any are in stock. Called from
@@ -196,6 +277,8 @@ class GameEngine(
         updateComboTimeout()
         updatePowerupTimers()
         updatePlayer()
+        updateStage()
+        updateWaves()
 
         updateEnemies()
         maybeSpawnEnemy()
@@ -208,8 +291,10 @@ class GameEngine(
 
         if (score > profile.highScore) {
             profile.highScore = score
-            if (!newHighAnnounced) { events += GameEvent.NewHighScore; newHighAnnounced = true }
+            // A first-ever run has no record to beat, so nothing to celebrate at its first point.
+            if (!newHighAnnounced && highScoreAtStart > 0) { events += GameEvent.NewHighScore; newHighAnnounced = true }
         }
+        trackRunMissions()
     }
 
     // ---- Player ----------------------------------------------------------------------------
@@ -251,11 +336,16 @@ class GameEngine(
         while (i < enemies.size) {
             val e = enemies[i]
             e.x -= (e.speed + globalTime / 55f) * factor
+            if (e.changingLane && e.x < halfWidth * C.LANE_CHANGE_TRIGGER) {
+                val step = C.LANE_CHANGE_SPEED * factor
+                e.y = if (e.targetY > e.y) min(e.targetY, e.y + step) else max(e.targetY, e.y - step)
+            }
             if (e.x <= despawnX) { enemies.removeAt(i); continue }
-            if (enemyHitsPlayer(e)) {
-                if (profile.shieldCharges > 0) {
-                    profile.shieldCharges -= 1
+            if (enemyOverlaps(e, 0f, 0f)) {
+                if (shieldCharges > 0) {
+                    if (mode == RunMode.DAILY) runShieldCharges -= 1 else profile.shieldCharges -= 1
                     profile.lifetimeShieldBlocks += 1
+                    shieldUsedInRun = true
                     events += GameEvent.ShieldBlocked
                     enemies.removeAt(i)
                     continue
@@ -265,11 +355,25 @@ class GameEngine(
                     return
                 }
             }
+            // Near miss: the car entered the padded band around the player and left it again
+            // without a collision (a collision removes the car above, so it never gets here).
+            if (!e.nearMissed) {
+                if (enemyOverlaps(e, C.NEAR_MISS_PAD_X, C.NEAR_MISS_PAD_Y)) {
+                    e.grazing = true
+                } else if (e.grazing) {
+                    e.nearMissed = true
+                    awardNearMiss(e)
+                }
+            }
             i++
         }
     }
 
-    private fun enemyHitsPlayer(e: Enemy): Boolean {
+    /**
+     * The original per-depth collision box between [e] and the player, grown by [padX]/[padY] on
+     * every side. With zero padding this is exactly the crash test; padded it is the near-miss band.
+     */
+    private fun enemyOverlaps(e: Enemy, padX: Float, padY: Float): Boolean {
         val ph = C.PLAYER_HITBOX
         val hb = C.ENEMY_HITBOX
         val px = player.x
@@ -277,29 +381,121 @@ class GameEngine(
         val y = e.y + bounce
         val x = e.x
         val size = 10f - y / 9f
+        val len = e.length
         return when {
             y <= -20f ->
-                x - hb * 2.3f <= px + ph && x + hb * 2.3f - size >= px - ph &&
-                    y + hb / 4f - 10f >= py - ph / 4f - 9f && y - hb / 4f - 10f <= py + ph / 4f - 9f
+                x - hb * 2.3f * len <= px + ph + padX && x + hb * 2.3f * len - size >= px - ph - padX &&
+                    y + hb / 4f - 10f >= py - ph / 4f - 9f - padY && y - hb / 4f - 10f <= py + ph / 4f - 9f + padY
             y <= 10f ->
-                x - hb * 1.4f <= px + ph && x + hb * 1.4f - size >= px - ph &&
-                    y + hb / 7f - 10f >= py - ph / 4f - 10f && y - hb / 7f - 10f <= py + ph / 4f - 10f
+                x - hb * 1.4f * len <= px + ph + padX && x + hb * 1.4f * len - size >= px - ph - padX &&
+                    y + hb / 7f - 10f >= py - ph / 4f - 10f - padY && y - hb / 7f - 10f <= py + ph / 4f - 10f + padY
             else ->
-                x - hb <= px + ph && x + hb - size >= px - ph &&
-                    y + hb / 12f - 8f >= py - ph / 5f - 8f && y - hb / 12f - 8f <= py + ph / 5f - 8f
+                x - hb * len <= px + ph + padX && x + hb * len - size >= px - ph - padX &&
+                    y + hb / 12f - 8f >= py - ph / 5f - 8f - padY && y - hb / 12f - 8f <= py + ph / 5f - 8f + padY
         }
+    }
+
+    private fun awardNearMiss(e: Enemy) {
+        val value = ceil(C.NEAR_MISS_POINTS * comboMultiplier * (if (doubleActive) 2f else 1f)).toInt()
+        score += value
+        lastCoinMs = clockMs // a near miss keeps the combo timer alive, like a coin
+        bumpStreak()
+        nearMissesInRun += 1
+        profile.lifetimeNearMisses += 1
+        addMission(MissionType.NEAR_MISS, 1)
+        lastNearMissMs = clockMs
+        lastNearMissPoints = value
+        spawnNearMissSparks(e)
+        events += GameEvent.NearMiss(value)
+        checkAchievements()
     }
 
     private fun maybeSpawnEnemy() {
         if (clockMs - enemyTimer < enemySpawnDelay || enemies.size >= C.MAX_ENEMIES) return
         var speedMult = 1f + (score / 30) * 0.1f
         speedMult = min(speedMult, C.SPEED_MULT_MAX)
-        val hue = rng.intInRange(0, 359)
-        enemies += Enemy(C.ENEMY_SPAWN_X, rng.intInRange(25f, -50f).toFloat(), speedMult, hue)
+        val hue = trafficRng.intInRange(0, 359)
+        val y = trafficRng.intInRange(25f, -50f).toFloat()
+        // Always draw the same number of values per spawn, whatever kind comes out, so the
+        // sequence of traffic stays reproducible from the seed.
+        val kind = pickEnemyKind(trafficRng.next())
+        val shift = trafficRng.nextFloat(C.LANE_CHANGE_MIN, C.LANE_CHANGE_MAX)
+        val up = trafficRng.next() < 0.5f
+        enemies += when (kind) {
+            EnemyKind.CAR -> Enemy(C.ENEMY_SPAWN_X, y, speedMult, hue)
+            EnemyKind.TRUCK -> Enemy(C.ENEMY_SPAWN_X, y, speedMult * C.TRUCK_SPEED, hue, kind)
+            EnemyKind.SPEEDER -> {
+                events += GameEvent.SpeederIncoming
+                Enemy(C.SPEEDER_SPAWN_X, y, speedMult * C.SPEEDER_SPEED, hue, kind)
+            }
+            EnemyKind.LANE_CHANGER -> {
+                var target = if (up) y + shift else y - shift
+                if (target > C.LANE_Y_MAX || target < C.LANE_Y_MIN) target = if (up) y - shift else y + shift
+                Enemy(C.ENEMY_SPAWN_X, y, speedMult, hue, kind, target.coerceIn(C.LANE_Y_MIN, C.LANE_Y_MAX))
+            }
+        }
         enemyTimer = clockMs
         val lo = 870f - ceil(globalTime * 2f) - difficulty * 10f
         val hi = 3900f - ceil(globalTime * 25f) - difficulty * 20f
-        enemySpawnDelay = max(C.ENEMY_SPAWN_MIN_MS, rng.intInRange(lo, hi).toFloat())
+        enemySpawnDelay = max(C.ENEMY_SPAWN_MIN_MS, trafficRng.intInRange(lo, hi).toFloat())
+    }
+
+    /** Which kind of traffic a spawn becomes, given a uniform [roll] in [0, 1). */
+    private fun pickEnemyKind(roll: Float): EnemyKind {
+        val runSec = (clockMs - streakStartMs) / 1000f
+        var acc = 0f
+        if (runSec >= C.SPEEDER_UNLOCK_S) { acc += C.SPEEDER_CHANCE; if (roll < acc) return EnemyKind.SPEEDER }
+        if (runSec >= C.LANE_CHANGER_UNLOCK_S) { acc += C.LANE_CHANGER_CHANCE; if (roll < acc) return EnemyKind.LANE_CHANGER }
+        if (runSec >= C.TRUCK_UNLOCK_S) { acc += C.TRUCK_CHANCE; if (roll < acc) return EnemyKind.TRUCK }
+        return EnemyKind.CAR
+    }
+
+    // ---- Stages ----------------------------------------------------------------------------
+
+    private fun updateStage() {
+        val reached = ((clockMs - streakStartMs) / C.STAGE_MS).toInt()
+        if (reached > stage) {
+            stage = reached
+            events += GameEvent.StageReached(stage)
+        }
+    }
+
+    // ---- Late-game waves -------------------------------------------------------------------
+
+    private fun updateWaves() {
+        val runMs = clockMs - streakStartMs
+        if (wave != null) {
+            if (clockMs >= waveEndMs) {
+                wave = null
+                nextWaveRunMs = runMs + waveRng.intInRange(C.WAVE_GAP_MIN_MS, C.WAVE_GAP_MAX_MS)
+            }
+            return
+        }
+        if (runMs < nextWaveRunMs) return
+        val kind = if (waveRng.next() < 0.5f) WaveKind.CONVOY else WaveKind.FOG
+        wave = kind
+        lastWave = kind
+        waveStartMs = clockMs
+        wavesInRun += 1
+        when (kind) {
+            WaveKind.CONVOY -> { spawnConvoy(); waveEndMs = clockMs + C.CONVOY_MS }
+            WaveKind.FOG -> waveEndMs = clockMs + C.FOG_MS
+        }
+        events += GameEvent.WaveStarted(kind)
+    }
+
+    /** A wall of same-speed cars across every lane but one, far enough out to read the gap. */
+    private fun spawnConvoy() {
+        val gap = waveRng.intInRange(0, C.CONVOY_LANES.size - 1)
+        val hue = waveRng.intInRange(0, 359)
+        val speed = min(1f + (score / 30) * 0.1f, C.SPEED_MULT_MAX)
+        for (k in C.CONVOY_LANES.indices) {
+            if (k == gap) continue
+            enemies += Enemy(C.CONVOY_SPAWN_X, C.CONVOY_LANES[k], speed, hue)
+        }
+        // Hold regular traffic back until the wall has gone by, so nothing plugs the gap.
+        enemyTimer = clockMs
+        enemySpawnDelay = C.CONVOY_MS.toFloat()
     }
 
     // ---- Coins -----------------------------------------------------------------------------
@@ -343,33 +539,34 @@ class GameEngine(
         val value = ceil(1f * comboMultiplier * (if (doubleActive) 2f else 1f)).toInt()
         score += value
         coinsInSession += 1
-        streak += 1
         lastCoinMs = clockMs
         val coinGain = if (coinRushActive) 2 else 1
         profile.totalCoins += coinGain
         profile.lifetimeCoins += coinGain
-        if (streak > profile.longestStreak) profile.longestStreak = streak
+        bumpStreak()
         spawnCoinSparkle()
         events += GameEvent.CoinCollected
-        if (!profile.dailyCompleted && profile.dailyType == 0) {
-            profile.dailyProgress += 1
-            if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
-        }
-        // Combo daily tracks the best streak reached today (across runs).
-        if (!profile.dailyCompleted && profile.dailyType == 2) {
-            if (streak > profile.dailyProgress) profile.dailyProgress = streak
-            if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
-        }
+        addMission(MissionType.COINS, 1)
         checkAchievements()
+    }
+
+    /** One more link in the combo chain (a coin or a near miss). */
+    private fun bumpStreak() {
+        streak += 1
+        val tier = C.comboTier(streak)
+        if (tier > C.comboTier(streak - 1)) events += GameEvent.ComboTierUp(tier)
+        if (streak > bestStreakInRun) bestStreakInRun = streak
+        if (streak > profile.longestStreak) profile.longestStreak = streak
+        bestMission(MissionType.COMBO, streak)
     }
 
     private fun maybeSpawnCoin() {
         if (clockMs - coinTimer < coinSpawnDelay || coins.size >= C.MAX_COINS) return
-        coins += Coin(C.COIN_SPAWN_X, rng.intInRange(21f, -60f).toFloat(), C.COIN_BASE_SPEED)
+        coins += Coin(C.COIN_SPAWN_X, coinRng.intInRange(21f, -60f).toFloat(), C.COIN_BASE_SPEED)
         coinTimer = clockMs
         val lo = 720f - ceil(globalTime * 2f)
         val hi = 5000f - ceil(globalTime * 45f)
-        coinSpawnDelay = rng.intInRange(lo, hi).toFloat()
+        coinSpawnDelay = coinRng.intInRange(lo, hi).toFloat()
     }
 
     // ---- Power-ups -------------------------------------------------------------------------
@@ -385,10 +582,8 @@ class GameEngine(
                     p.collected = true
                     applyPowerup(p.type)
                     profile.lifetimePowerups += 1
-                    if (!profile.dailyCompleted && profile.dailyType == 3) {
-                        profile.dailyProgress += 1
-                        if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
-                    }
+                    powerupsInRun += 1
+                    addMission(MissionType.POWERUPS, 1)
                     checkAchievements()
                     events += GameEvent.PowerUpCollected(p.type)
                 }
@@ -405,9 +600,11 @@ class GameEngine(
             p.y + hb >= player.y - ph / 4f - 10f && p.y - hb <= player.y + ph / 4f - 10f
     }
 
-    /** Effective duration of a timed road pickup, extended by the tiered shop upgrades. */
+    /** Effective duration of a timed road pickup, extended by the tiered shop upgrades
+     *  (except on the daily route, where everyone gets the base duration). */
     private fun boostedDuration(type: PowerUpType): Long =
-        type.durationMs * (100 + profile.boostDurationPercent(type)) / 100
+        if (mode == RunMode.DAILY) type.durationMs
+        else type.durationMs * (100 + profile.boostDurationPercent(type)) / 100
 
     /** Effective duration of a starter boost - the long base, same tier upgrades applied. */
     private fun starterDuration(type: PowerUpType): Long =
@@ -419,7 +616,9 @@ class GameEngine(
         // Never shorten a running effect: a road pickup grabbed while a longer starter boost is
         // active keeps the later deadline (with equal durations this is the old reset behaviour).
         when (type) {
-            PowerUpType.SHIELD -> profile.shieldCharges = min(profile.shieldCharges + 1, profile.shieldMax)
+            PowerUpType.SHIELD ->
+                if (mode == RunMode.DAILY) runShieldCharges = min(runShieldCharges + 1, C.SHIELD_MAX)
+                else profile.shieldCharges = min(profile.shieldCharges + 1, profile.shieldMax)
             PowerUpType.MAGNET -> {
                 val until = clockMs + durationMs
                 if (!magnetActive || until > magnetUntil) { magnetUntil = until; magnetDurMs = durationMs }
@@ -465,7 +664,7 @@ class GameEngine(
             PowerUpType.SLOWMO -> slowmoUntil
             PowerUpType.DOUBLE -> doubleUntil
             PowerUpType.COIN_RUSH -> coinRushUntil
-            PowerUpType.SHIELD -> return profile.shieldCharges
+            PowerUpType.SHIELD -> return shieldCharges
         }
         return ceil(max(0L, until - clockMs) / 1000f).toInt()
     }
@@ -475,10 +674,10 @@ class GameEngine(
 
     private fun maybeSpawnPowerup() {
         if (clockMs - powerupTimer < powerupSpawnDelay || powerups.size >= C.MAX_POWERUPS) return
-        val type = rng.pick(PowerUpType.spawnable)
-        powerups += PowerUp(C.POWERUP_SPAWN_X, rng.intInRange(25f, -50f).toFloat(), type)
+        val type = powerupRng.pick(PowerUpType.spawnable)
+        powerups += PowerUp(C.POWERUP_SPAWN_X, powerupRng.intInRange(25f, -50f).toFloat(), type)
         powerupTimer = clockMs
-        powerupSpawnDelay = rng.intInRange(C.POWERUP_SPAWN_MIN_MS, C.POWERUP_SPAWN_MAX_MS).toFloat()
+        powerupSpawnDelay = powerupRng.intInRange(C.POWERUP_SPAWN_MIN_MS, C.POWERUP_SPAWN_MAX_MS).toFloat()
     }
 
     // ---- Combo -----------------------------------------------------------------------------
@@ -493,10 +692,8 @@ class GameEngine(
         val survived = survivalSeconds
         if (survived > profile.longestStreakTimeSec) profile.longestStreakTimeSec = survived
         streak = 0
-        if (!profile.dailyCompleted && profile.dailyType == 1) {
-            if (survived > profile.dailyProgress) profile.dailyProgress = survived
-            if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
-        }
+        trackRunMissions()
+        if (mode == RunMode.DAILY) recordDailyRun()
         checkAchievements()
         spawnCrashParticles()
         gameOverSlide = 370f
@@ -539,31 +736,87 @@ class GameEngine(
         powerups += PowerUp(132f, -55f, PowerUpType.MAGNET)
     }
 
-    // ---- Daily -----------------------------------------------------------------------------
+    // ---- Daily route -----------------------------------------------------------------------
+
+    /** The route's seed for UTC day [dayKey]: a plain hash, identical on every device. */
+    private fun dailySeed(dayKey: Long): Long = (dayKey + 1L) * -7046029254386353131L
+
+    private fun recordDailyRun() {
+        val p = profile
+        if (p.dailyRunDayKey != runDayKey) {
+            p.dailyRunDayKey = runDayKey
+            p.dailyRunBest = 0
+            p.dailyRunAttempts = 0
+        }
+        p.dailyRunAttempts += 1
+        p.lifetimeDailyRuns += 1
+        if (score > p.dailyRunBest) {
+            p.dailyRunBest = score
+            dailyBestBeaten = true
+        }
+    }
+
+    // ---- Daily missions --------------------------------------------------------------------
 
     fun refreshDaily(realNowMs: Long) {
         val today = realNowMs / C.DAY_MS
         val p = profile
-        if (p.dailyDayKey == today) return
+        if (p.dailyDayKey == today) {
+            // A save from before missions existed: same day, but nothing to show yet.
+            if (p.missions.isEmpty()) p.missions = Missions.forDay(today)
+            return
+        }
         val prev = p.dailyDayKey
         if (prev != Long.MIN_VALUE && today - prev == 1L) p.dailyStreak += 1
         else p.dailyStreak = 1
         if (p.dailyStreak > p.bestDailyStreak) p.bestDailyStreak = p.dailyStreak
         p.dailyDayKey = today
-        p.dailyCompleted = false
-        p.dailyProgress = 0
-        // 0 = collect coins, 1 = survive seconds, 2 = hit a combo in one run, 3 = collect power-ups
-        p.dailyType = rng.intInRange(0, 3)
-        p.dailyGoal = when (p.dailyType) {
-            2 -> rng.intInRange(8, 16)
-            3 -> rng.intInRange(3, 6)
-            else -> rng.intInRange(25, 60)
+        p.missions = Missions.forDay(today)
+        p.missionsBonusClaimed = false
+    }
+
+    /** Adds [amount] to every unfinished mission of [type] (the ones that sum across runs). */
+    private fun addMission(type: MissionType, amount: Int) {
+        val list = profile.missions
+        for (i in list.indices) {
+            val m = list[i]
+            if (m.type != type || m.completed) continue
+            m.progress += amount
+            if (m.progress >= m.goal) completeMission(m)
         }
     }
 
-    private fun completeDaily() {
-        profile.dailyCompleted = true
-        profile.totalCoins += C.DAILY_REWARD
+    /** Raises a best-single-run mission of [type] to [value] if this run beats the day's best. */
+    private fun bestMission(type: MissionType, value: Int) {
+        val list = profile.missions
+        for (i in list.indices) {
+            val m = list[i]
+            if (m.type != type || m.completed || value <= m.progress) continue
+            m.progress = value
+            if (m.progress >= m.goal) completeMission(m)
+        }
+    }
+
+    /** Missions that follow the run as a whole, updated every tick so the HUD stays live. */
+    private fun trackRunMissions() {
+        val survived = survivalSeconds
+        bestMission(MissionType.SCORE, score)
+        bestMission(MissionType.SURVIVE, survived)
+        if (!shieldUsedInRun) bestMission(MissionType.CLEAN, survived)
+    }
+
+    private fun completeMission(m: DailyMission) {
+        m.progress = m.goal
+        m.completed = true
+        profile.totalCoins += m.reward
+        profile.lifetimeMissions += 1
+        events += GameEvent.MissionCompleted(m.type, m.goal, m.reward)
+        if (!profile.missionsBonusClaimed && profile.missions.all { it.completed }) {
+            profile.missionsBonusClaimed = true
+            profile.totalCoins += Missions.ALL_DONE_BONUS
+            events += GameEvent.AllMissionsCompleted(Missions.ALL_DONE_BONUS)
+        }
+        checkAchievements()
     }
 
     // ---- Achievements ----------------------------------------------------------------------
@@ -590,6 +843,9 @@ class GameEngine(
         AchievementKind.SHIELD_BLOCK -> profile.lifetimeShieldBlocks >= a.goal
         AchievementKind.BOOST_USED -> profile.lifetimeBoostsUsed >= a.goal
         AchievementKind.POWERUP_COLLECT -> profile.lifetimePowerups >= a.goal
+        AchievementKind.NEAR_MISS -> profile.lifetimeNearMisses >= a.goal
+        AchievementKind.MISSIONS -> profile.lifetimeMissions >= a.goal
+        AchievementKind.DAILY_RUNS -> profile.lifetimeDailyRuns >= a.goal
     }
 
     // ---- Particles & stars -----------------------------------------------------------------
@@ -600,6 +856,19 @@ class GameEngine(
                 x = player.x, y = player.y + 6f,
                 vx = rng.nextFloat(-1.4f, 1.4f), vy = rng.nextFloat(0.4f, 2.0f),
                 life = 1f, maxLife = 1f, color = 0xFFFFD54A, size = rng.nextFloat(0.8f, 1.8f),
+            )
+        }
+    }
+
+    /** Cyan sparks streaking off between the player and the car that just slipped past. */
+    private fun spawnNearMissSparks(e: Enemy) {
+        val mx = (player.x + e.x) / 2f
+        val my = (player.y + e.y) / 2f
+        repeat(8) {
+            particles += Particle(
+                x = mx, y = my,
+                vx = rng.nextFloat(-2.6f, -0.6f), vy = rng.nextFloat(-0.8f, 1.6f),
+                life = 1f, maxLife = 1f, color = 0xFF37E7FF, size = rng.nextFloat(0.8f, 1.6f),
             )
         }
     }
