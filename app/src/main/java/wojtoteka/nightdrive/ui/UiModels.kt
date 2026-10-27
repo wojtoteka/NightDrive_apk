@@ -89,6 +89,11 @@ data class HudState(
     val paused: Boolean = false,
     val dailyRun: Boolean = false,
     val dailyBestBeaten: Boolean = false,
+    // Run summary for the game-over screen
+    val runSeconds: Int = 0,
+    val bestStreak: Int = 0,
+    val nearMisses: Int = 0,
+    val stage: Int = 1,
     val score: Int = 0,
     val coinsInSession: Int = 0,
     val comboMultiplier: Float = 1f,

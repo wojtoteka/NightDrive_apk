@@ -56,6 +56,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import wojtoteka.nightdrive.domain.Achievements
 import wojtoteka.nightdrive.engine.GamePhase
 import wojtoteka.nightdrive.net.SubmitState
 import wojtoteka.nightdrive.ui.Destination
@@ -360,6 +361,9 @@ private fun GameOverOverlay(vm: GameViewModel) {
                     }
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            RunStats(vm)
+            NextGoals(vm, isRecord)
             LeaderboardEntrySection(vm)
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -368,6 +372,64 @@ private fun GameOverOverlay(vm: GameViewModel) {
                 SecondaryButton(s["main_menu"], { vm.quitToMenu() }, Modifier.weight(0.8f))
             }
         }
+    }
+}
+
+/** How the run went, beyond the score: time, best combo, near misses, stage reached. */
+@Composable
+private fun RunStats(vm: GameViewModel) {
+    val s = LocalStrings.current
+    val hud = vm.hud
+    Panel(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.padding(horizontal = 18.dp, vertical = 12.dp).height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Readout(s["run_time"], formatTime(hud.runSeconds), Modifier.weight(1f), small = true)
+            VRule(30.dp)
+            Spacer(Modifier.width(14.dp))
+            Readout(s["best_streak"], hud.bestStreak.toString(), Modifier.weight(1f), small = true)
+            VRule(30.dp)
+            Spacer(Modifier.width(14.dp))
+            Readout(s["mission_nearmiss_s"], hud.nearMisses.toString(), Modifier.weight(1f), small = true)
+            VRule(30.dp)
+            Spacer(Modifier.width(14.dp))
+            Readout(s["stage"], hud.stage.toString(), Modifier.weight(1f), small = true)
+        }
+    }
+}
+
+/**
+ * What to chase next: how far the record was, and the locked achievement closest to done.
+ * Both are reasons for one more run, so they sit right above the "play again" button.
+ */
+@Composable
+private fun NextGoals(vm: GameViewModel, isRecord: Boolean) {
+    val s = LocalStrings.current
+    val hud = vm.hud
+    val p = vm.profileState
+    val recordGap = when {
+        hud.dailyRun -> if (!hud.dailyBestBeaten && p.dailyRunBestToday > hud.score) p.dailyRunBestToday - hud.score else 0
+        !isRecord && hud.highScore > hud.score -> hud.highScore - hud.score
+        else -> 0
+    }
+    val next = remember(p) {
+        Achievements.all
+            .filter { !p.unlockedAchievements.contains(it.id) }
+            .map { it to achievementProgress(it, p).coerceAtMost(it.goal) }
+            .filter { (_, progress) -> progress > 0 }
+            .maxByOrNull { (a, progress) -> progress.toFloat() / a.goal }
+    }
+    if (recordGap == 0 && next == null) return
+    Spacer(Modifier.height(10.dp))
+    if (recordGap > 0) {
+        val key = if (hud.dailyRun) "to_daily_record" else "to_record"
+        Overline(s[key].replace("%d", recordGap.toString()), color = NDColors.TextDim)
+    }
+    if (next != null) {
+        val (a, progress) = next
+        if (recordGap > 0) Spacer(Modifier.height(4.dp))
+        Overline("${s["next_goal"]}: ${s[a.nameKey]}  $progress/${a.goal}", color = NDColors.TextFaint)
     }
 }
 

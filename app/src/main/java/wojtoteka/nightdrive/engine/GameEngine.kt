@@ -72,6 +72,8 @@ class GameEngine(
     var difficulty = 0; private set
     var gameOverSlide = 0f; private set   // b_y in the original: game-over panel slide-in
     var nearMissesInRun = 0; private set
+    var bestStreakInRun = 0; private set
+    var powerupsInRun = 0; private set
     var wavesInRun = 0; private set
     /** The shield has blocked a hit this run (ends the "clean run" mission's count). */
     private var shieldUsedInRun = false
@@ -186,6 +188,7 @@ class GameEngine(
         magnetActive = false; slowmoActive = false; doubleActive = false; coinRushActive = false
         newHighAnnounced = false
         nearMissesInRun = 0; lastNearMissMs = 0L; lastNearMissPoints = 0
+        bestStreakInRun = 0; powerupsInRun = 0
         wave = null; lastWave = null; wavesInRun = 0; nextWaveRunMs = C.WAVES_START_MS
         stage = 0; streakStartMs = 0L
         shieldUsedInRun = false
@@ -542,6 +545,7 @@ class GameEngine(
     /** One more link in the combo chain (a coin or a near miss). */
     private fun bumpStreak() {
         streak += 1
+        if (streak > bestStreakInRun) bestStreakInRun = streak
         if (streak > profile.longestStreak) profile.longestStreak = streak
         bestMission(MissionType.COMBO, streak)
     }
@@ -568,6 +572,7 @@ class GameEngine(
                     p.collected = true
                     applyPowerup(p.type)
                     profile.lifetimePowerups += 1
+                    powerupsInRun += 1
                     addMission(MissionType.POWERUPS, 1)
                     checkAchievements()
                     events += GameEvent.PowerUpCollected(p.type)

@@ -264,6 +264,21 @@ class GameEngineTest {
     }
 
     @Test
+    fun runSummaryCountsThisRunOnly() {
+        val engine = startedEngine()
+        engine.coins.clear()
+        engine.coins += Coin(engine.player.x, engine.player.y - 10f, 0f)
+        var guard = 0
+        while (engine.coinsInSession == 0 && guard++ < 300) engine.update(0L)
+        assertEquals(1, engine.bestStreakInRun)
+        engine.startRun(0L)
+        assertEquals(0, engine.bestStreakInRun)
+        assertEquals(0, engine.nearMissesInRun)
+        assertEquals(0, engine.powerupsInRun)
+        assertEquals(0, engine.stage)
+    }
+
+    @Test
     fun comboMultiplierTiersMatchConfig() {
         assertEquals(1f, GameConfig.comboMultiplier(0), 0f)
         assertEquals(1.5f, GameConfig.comboMultiplier(GameConfig.COMBO_T1), 0f)
