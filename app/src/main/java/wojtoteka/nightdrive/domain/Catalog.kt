@@ -34,6 +34,7 @@ enum class AchievementKind {
     POWERUP_COLLECT,   // lifetime power-ups picked up on the road
     NEAR_MISS,         // lifetime cars passed by a hair
     MISSIONS,          // lifetime daily missions completed
+    DAILY_RUNS,        // lifetime daily-route runs driven
 }
 
 data class Achievement(
@@ -70,6 +71,7 @@ object Achievements {
         Achievement("nearmiss25", "ach_nearmiss25", "ach_nearmiss25_d", 25, AchievementKind.NEAR_MISS, 20),
         Achievement("nearmiss200", "ach_nearmiss200", "ach_nearmiss200_d", 200, AchievementKind.NEAR_MISS, 100),
         Achievement("missions30", "ach_missions30", "ach_missions30_d", 30, AchievementKind.MISSIONS, 75),
+        Achievement("dailyrun10", "ach_dailyrun10", "ach_dailyrun10_d", 10, AchievementKind.DAILY_RUNS, 40),
     )
 }
 

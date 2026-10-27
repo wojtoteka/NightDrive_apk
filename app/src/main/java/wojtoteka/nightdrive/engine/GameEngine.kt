@@ -22,8 +22,27 @@ import kotlin.math.sin
  */
 class GameEngine(
     val profile: PlayerProfile,
+    /** Cosmetic randomness (particles, stars) and the seed source for standard runs. */
     private val rng: Rng = Rng(),
 ) {
+    // Gameplay randomness, one stream per spawner and reseeded every run (see [seedRun]). Separate
+    // streams keep each sequence fixed no matter how the spawners interleave, so a daily route
+    // plays out the same for everyone even though spawn timing reacts to the score.
+    private var trafficRng = Rng()
+    private var coinRng = Rng()
+    private var powerupRng = Rng()
+    private var waveRng = Rng()
+
+    var mode: RunMode = RunMode.STANDARD; private set
+    private var runDayKey = 0L
+    /** The daily route's shield: starts empty, filled only by pickups, never saved. */
+    private var runShieldCharges = 0
+    /** This daily-route run beat the day's best so far. */
+    var dailyBestBeaten = false; private set
+
+    /** Shield charges in play: the garage stock normally, the run-local count on the daily route. */
+    val shieldCharges: Int get() = if (mode == RunMode.DAILY) runShieldCharges else profile.shieldCharges
+
     // Viewport (virtual units). Width depends on device aspect ratio.
     var halfWidth: Float = 222f
         private set
@@ -155,8 +174,13 @@ class GameEngine(
         refreshDaily(realNowMs)
     }
 
-    fun startRun(realNowMs: Long) {
+    fun startRun(realNowMs: Long, mode: RunMode = RunMode.STANDARD) {
         refreshDaily(realNowMs)
+        this.mode = mode
+        runDayKey = realNowMs / C.DAY_MS
+        seedRun(if (mode == RunMode.DAILY) dailySeed(runDayKey) else rng.nextLong())
+        runShieldCharges = 0
+        dailyBestBeaten = false
         enemies.clear(); coins.clear(); powerups.clear(); particles.clear()
         score = 0; coinsInSession = 0; streak = 0; globalTime = 0f; difficulty = 0
         magnetActive = false; slowmoActive = false; doubleActive = false; coinRushActive = false
@@ -168,19 +192,27 @@ class GameEngine(
         clockMs = 0L; clockFrac = 0f; enemyTimer = 0L; coinTimer = 0L; powerupTimer = 0L; lastCoinMs = 0L
         enemySpawnDelay = C.ENEMY_START_DELAY_MS
         coinSpawnDelay = 0f
-        powerupSpawnDelay = rng.intInRange(C.POWERUP_SPAWN_MIN_MS, C.POWERUP_SPAWN_MAX_MS).toFloat()
+        powerupSpawnDelay = powerupRng.intInRange(C.POWERUP_SPAWN_MIN_MS, C.POWERUP_SPAWN_MAX_MS).toFloat()
         player.x = -halfWidth - C.PLAYER_START_X_MARGIN
         player.y = C.PLAYER_START_Y
         player.z = 0f
         phase = GamePhase.INTRO
-        starterBoostsPending = true
+        // The daily route is equal chances: purchased starters stay in stock for a normal run.
+        starterBoostsPending = mode == RunMode.STANDARD
         // The slow-motion starter is an "easier warm-up": it covers the run from second zero.
         // The virtual clock is frozen during the drive-in intro, so none of it is wasted there.
-        if (profile.pendingSlowmoStarts > 0) {
+        if (mode == RunMode.STANDARD && profile.pendingSlowmoStarts > 0) {
             profile.pendingSlowmoStarts--
             profile.lifetimeBoostsUsed++
             applyTimed(PowerUpType.SLOWMO, starterDuration(PowerUpType.SLOWMO))
         }
+    }
+
+    private fun seedRun(seed: Long) {
+        trafficRng = Rng(seed)
+        coinRng = Rng(seed xor 0x2545F4914F6CDD1DL)
+        powerupRng = Rng(seed xor 0x6A09E667F3BCC909L)
+        waveRng = Rng(seed xor 0x3C6EF372FE94F82BL)
     }
 
     /** Applies one of each purchased coin-earning starter boost, if any are in stock. Called from
@@ -302,8 +334,8 @@ class GameEngine(
             }
             if (e.x <= despawnX) { enemies.removeAt(i); continue }
             if (enemyOverlaps(e, 0f, 0f)) {
-                if (profile.shieldCharges > 0) {
-                    profile.shieldCharges -= 1
+                if (shieldCharges > 0) {
+                    if (mode == RunMode.DAILY) runShieldCharges -= 1 else profile.shieldCharges -= 1
                     profile.lifetimeShieldBlocks += 1
                     shieldUsedInRun = true
                     events += GameEvent.ShieldBlocked
@@ -374,13 +406,13 @@ class GameEngine(
         if (clockMs - enemyTimer < enemySpawnDelay || enemies.size >= C.MAX_ENEMIES) return
         var speedMult = 1f + (score / 30) * 0.1f
         speedMult = min(speedMult, C.SPEED_MULT_MAX)
-        val hue = rng.intInRange(0, 359)
-        val y = rng.intInRange(25f, -50f).toFloat()
+        val hue = trafficRng.intInRange(0, 359)
+        val y = trafficRng.intInRange(25f, -50f).toFloat()
         // Always draw the same number of values per spawn, whatever kind comes out, so the
         // sequence of traffic stays reproducible from the seed.
-        val kind = pickEnemyKind(rng.next())
-        val shift = rng.nextFloat(C.LANE_CHANGE_MIN, C.LANE_CHANGE_MAX)
-        val up = rng.next() < 0.5f
+        val kind = pickEnemyKind(trafficRng.next())
+        val shift = trafficRng.nextFloat(C.LANE_CHANGE_MIN, C.LANE_CHANGE_MAX)
+        val up = trafficRng.next() < 0.5f
         enemies += when (kind) {
             EnemyKind.CAR -> Enemy(C.ENEMY_SPAWN_X, y, speedMult, hue)
             EnemyKind.TRUCK -> Enemy(C.ENEMY_SPAWN_X, y, speedMult * C.TRUCK_SPEED, hue, kind)
@@ -394,7 +426,7 @@ class GameEngine(
         enemyTimer = clockMs
         val lo = 870f - ceil(globalTime * 2f) - difficulty * 10f
         val hi = 3900f - ceil(globalTime * 25f) - difficulty * 20f
-        enemySpawnDelay = max(C.ENEMY_SPAWN_MIN_MS, rng.intInRange(lo, hi).toFloat())
+        enemySpawnDelay = max(C.ENEMY_SPAWN_MIN_MS, trafficRng.intInRange(lo, hi).toFloat())
     }
 
     /** Which kind of traffic a spawn becomes, given a uniform [roll] in [0, 1). */
@@ -424,12 +456,12 @@ class GameEngine(
         if (wave != null) {
             if (clockMs >= waveEndMs) {
                 wave = null
-                nextWaveRunMs = runMs + rng.intInRange(C.WAVE_GAP_MIN_MS, C.WAVE_GAP_MAX_MS)
+                nextWaveRunMs = runMs + waveRng.intInRange(C.WAVE_GAP_MIN_MS, C.WAVE_GAP_MAX_MS)
             }
             return
         }
         if (runMs < nextWaveRunMs) return
-        val kind = if (rng.next() < 0.5f) WaveKind.CONVOY else WaveKind.FOG
+        val kind = if (waveRng.next() < 0.5f) WaveKind.CONVOY else WaveKind.FOG
         wave = kind
         lastWave = kind
         waveStartMs = clockMs
@@ -443,8 +475,8 @@ class GameEngine(
 
     /** A wall of same-speed cars across every lane but one, far enough out to read the gap. */
     private fun spawnConvoy() {
-        val gap = rng.intInRange(0, C.CONVOY_LANES.size - 1)
-        val hue = rng.intInRange(0, 359)
+        val gap = waveRng.intInRange(0, C.CONVOY_LANES.size - 1)
+        val hue = waveRng.intInRange(0, 359)
         val speed = min(1f + (score / 30) * 0.1f, C.SPEED_MULT_MAX)
         for (k in C.CONVOY_LANES.indices) {
             if (k == gap) continue
@@ -516,11 +548,11 @@ class GameEngine(
 
     private fun maybeSpawnCoin() {
         if (clockMs - coinTimer < coinSpawnDelay || coins.size >= C.MAX_COINS) return
-        coins += Coin(C.COIN_SPAWN_X, rng.intInRange(21f, -60f).toFloat(), C.COIN_BASE_SPEED)
+        coins += Coin(C.COIN_SPAWN_X, coinRng.intInRange(21f, -60f).toFloat(), C.COIN_BASE_SPEED)
         coinTimer = clockMs
         val lo = 720f - ceil(globalTime * 2f)
         val hi = 5000f - ceil(globalTime * 45f)
-        coinSpawnDelay = rng.intInRange(lo, hi).toFloat()
+        coinSpawnDelay = coinRng.intInRange(lo, hi).toFloat()
     }
 
     // ---- Power-ups -------------------------------------------------------------------------
@@ -553,9 +585,11 @@ class GameEngine(
             p.y + hb >= player.y - ph / 4f - 10f && p.y - hb <= player.y + ph / 4f - 10f
     }
 
-    /** Effective duration of a timed road pickup, extended by the tiered shop upgrades. */
+    /** Effective duration of a timed road pickup, extended by the tiered shop upgrades
+     *  (except on the daily route, where everyone gets the base duration). */
     private fun boostedDuration(type: PowerUpType): Long =
-        type.durationMs * (100 + profile.boostDurationPercent(type)) / 100
+        if (mode == RunMode.DAILY) type.durationMs
+        else type.durationMs * (100 + profile.boostDurationPercent(type)) / 100
 
     /** Effective duration of a starter boost - the long base, same tier upgrades applied. */
     private fun starterDuration(type: PowerUpType): Long =
@@ -567,7 +601,9 @@ class GameEngine(
         // Never shorten a running effect: a road pickup grabbed while a longer starter boost is
         // active keeps the later deadline (with equal durations this is the old reset behaviour).
         when (type) {
-            PowerUpType.SHIELD -> profile.shieldCharges = min(profile.shieldCharges + 1, profile.shieldMax)
+            PowerUpType.SHIELD ->
+                if (mode == RunMode.DAILY) runShieldCharges = min(runShieldCharges + 1, C.SHIELD_MAX)
+                else profile.shieldCharges = min(profile.shieldCharges + 1, profile.shieldMax)
             PowerUpType.MAGNET -> {
                 val until = clockMs + durationMs
                 if (!magnetActive || until > magnetUntil) { magnetUntil = until; magnetDurMs = durationMs }
@@ -613,7 +649,7 @@ class GameEngine(
             PowerUpType.SLOWMO -> slowmoUntil
             PowerUpType.DOUBLE -> doubleUntil
             PowerUpType.COIN_RUSH -> coinRushUntil
-            PowerUpType.SHIELD -> return profile.shieldCharges
+            PowerUpType.SHIELD -> return shieldCharges
         }
         return ceil(max(0L, until - clockMs) / 1000f).toInt()
     }
@@ -623,10 +659,10 @@ class GameEngine(
 
     private fun maybeSpawnPowerup() {
         if (clockMs - powerupTimer < powerupSpawnDelay || powerups.size >= C.MAX_POWERUPS) return
-        val type = rng.pick(PowerUpType.spawnable)
-        powerups += PowerUp(C.POWERUP_SPAWN_X, rng.intInRange(25f, -50f).toFloat(), type)
+        val type = powerupRng.pick(PowerUpType.spawnable)
+        powerups += PowerUp(C.POWERUP_SPAWN_X, powerupRng.intInRange(25f, -50f).toFloat(), type)
         powerupTimer = clockMs
-        powerupSpawnDelay = rng.intInRange(C.POWERUP_SPAWN_MIN_MS, C.POWERUP_SPAWN_MAX_MS).toFloat()
+        powerupSpawnDelay = powerupRng.intInRange(C.POWERUP_SPAWN_MIN_MS, C.POWERUP_SPAWN_MAX_MS).toFloat()
     }
 
     // ---- Combo -----------------------------------------------------------------------------
@@ -642,6 +678,7 @@ class GameEngine(
         if (survived > profile.longestStreakTimeSec) profile.longestStreakTimeSec = survived
         streak = 0
         trackRunMissions()
+        if (mode == RunMode.DAILY) recordDailyRun()
         checkAchievements()
         spawnCrashParticles()
         gameOverSlide = 370f
@@ -682,6 +719,26 @@ class GameEngine(
         coins += Coin(30f, -34f, 1f)
         coins += Coin(112f, -6f, 1f)
         powerups += PowerUp(132f, -55f, PowerUpType.MAGNET)
+    }
+
+    // ---- Daily route -----------------------------------------------------------------------
+
+    /** The route's seed for UTC day [dayKey]: a plain hash, identical on every device. */
+    private fun dailySeed(dayKey: Long): Long = (dayKey + 1L) * -7046029254386353131L
+
+    private fun recordDailyRun() {
+        val p = profile
+        if (p.dailyRunDayKey != runDayKey) {
+            p.dailyRunDayKey = runDayKey
+            p.dailyRunBest = 0
+            p.dailyRunAttempts = 0
+        }
+        p.dailyRunAttempts += 1
+        p.lifetimeDailyRuns += 1
+        if (score > p.dailyRunBest) {
+            p.dailyRunBest = score
+            dailyBestBeaten = true
+        }
     }
 
     // ---- Daily missions --------------------------------------------------------------------
@@ -773,6 +830,7 @@ class GameEngine(
         AchievementKind.POWERUP_COLLECT -> profile.lifetimePowerups >= a.goal
         AchievementKind.NEAR_MISS -> profile.lifetimeNearMisses >= a.goal
         AchievementKind.MISSIONS -> profile.lifetimeMissions >= a.goal
+        AchievementKind.DAILY_RUNS -> profile.lifetimeDailyRuns >= a.goal
     }
 
     // ---- Particles & stars -----------------------------------------------------------------

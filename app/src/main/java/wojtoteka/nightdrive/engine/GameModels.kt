@@ -3,6 +3,12 @@ package wojtoteka.nightdrive.engine
 import wojtoteka.nightdrive.domain.MissionType
 import wojtoteka.nightdrive.domain.PowerUpType
 
+/**
+ * STANDARD is the normal endless run. DAILY is the daily route: the same seed for every player on
+ * a given UTC day, and equal chances - no garage shield, no starter boosts, no duration upgrades.
+ */
+enum class RunMode { STANDARD, DAILY }
+
 /** High-level phase of the simulation. Menu/shop/etc. navigation lives in the UI layer. */
 enum class GamePhase { MENU, INTRO, PLAYING, GAME_OVER }
 

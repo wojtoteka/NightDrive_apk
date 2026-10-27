@@ -184,6 +184,7 @@ private fun HudLeft(vm: GameViewModel, modifier: Modifier) {
         }
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (hud.dailyRun) Tag(s["daily_run"])
             if (hud.coinsInSession > 0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CoinIcon(16)
@@ -308,6 +309,7 @@ private fun GameOverOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
     val hud = vm.hud
     val isRecord = hud.score > 0 && hud.score >= hud.highScore
+    val p = vm.profileState
     Box(
         Modifier
             .fillMaxSize()
@@ -329,6 +331,10 @@ private fun GameOverOverlay(vm: GameViewModel) {
                     Spacer(Modifier.width(14.dp))
                     Tag(s["new_record"].trimEnd('!'), filled = true)
                 }
+                if (hud.dailyRun) {
+                    Spacer(Modifier.width(10.dp))
+                    Tag(if (hud.dailyBestBeaten) s["daily_run_best"] else s["daily_run"], filled = hud.dailyBestBeaten)
+                }
             }
             Spacer(Modifier.height(14.dp))
             Panel(Modifier.fillMaxWidth()) {
@@ -339,7 +345,8 @@ private fun GameOverOverlay(vm: GameViewModel) {
                     Readout(s["score"], hud.score.toString(), Modifier.weight(1f), valueColor = if (isRecord) NDColors.Accent else NDColors.Text)
                     VRule(40.dp)
                     Spacer(Modifier.width(18.dp))
-                    Readout(s["high_score"], hud.highScore.toString(), Modifier.weight(1f))
+                    if (hud.dailyRun) Readout(s["daily_run_best"], p.dailyRunBestToday.toString(), Modifier.weight(1f))
+                    else Readout(s["high_score"], hud.highScore.toString(), Modifier.weight(1f))
                     VRule(40.dp)
                     Spacer(Modifier.width(18.dp))
                     Column(Modifier.weight(1f)) {
@@ -368,6 +375,11 @@ private fun GameOverOverlay(vm: GameViewModel) {
 @Composable
 private fun LeaderboardEntrySection(vm: GameViewModel) {
     val s = LocalStrings.current
+    if (vm.hud.dailyRun) {
+        Spacer(Modifier.height(10.dp))
+        Text(s["daily_run_note"], style = NDType.Caption, color = NDColors.TextFaint)
+        return
+    }
     val line: Pair<String, Color>? = when (val st = vm.submitState) {
         is SubmitState.Done -> "${s["saved_rank"]} #${st.rank ?: "?"}" to NDColors.Positive
         SubmitState.Submitting -> s["submitting"] to NDColors.TextDim

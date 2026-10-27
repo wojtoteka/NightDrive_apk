@@ -27,6 +27,7 @@ import wojtoteka.nightdrive.engine.GameConfig
 import wojtoteka.nightdrive.engine.GameEngine
 import wojtoteka.nightdrive.engine.GameEvent
 import wojtoteka.nightdrive.engine.GamePhase
+import wojtoteka.nightdrive.engine.RunMode
 import wojtoteka.nightdrive.engine.WaveKind
 import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.net.LeaderboardEntry
@@ -220,7 +221,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     audio.play(Sfx.DEFEAT)
                     haptics.heavy()
                     onGameOver()
-                    evaluateQualification(engine.score)
+                    // The daily route has no global ranking entry (see RunMode.DAILY).
+                    if (engine.mode == RunMode.STANDARD) evaluateQualification(engine.score)
                 }
                 is GameEvent.AchievementUnlocked -> {
                     audio.play(Sfx.COIN, 0.6f)
@@ -246,9 +248,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             engine.phase == GamePhase.MENU && hud.phase == GamePhase.MENU
         ) return
         val pus = ArrayList<HudPowerUp>(5)
-        if (profile.shieldCharges > 0) {
-            pus += HudPowerUp(PowerUpType.SHIELD, true, profile.shieldCharges, profile.shieldCharges, 0f)
-        }
+        val shield = engine.shieldCharges
+        if (shield > 0) pus += HudPowerUp(PowerUpType.SHIELD, true, shield, shield, 0f)
         if (engine.doubleActive) pus += powerUpHud(PowerUpType.DOUBLE)
         if (engine.magnetActive) pus += powerUpHud(PowerUpType.MAGNET)
         if (engine.slowmoActive) pus += powerUpHud(PowerUpType.SLOWMO)
@@ -258,6 +259,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         hud = HudState(
             phase = engine.phase,
             paused = engine.paused,
+            dailyRun = engine.mode == RunMode.DAILY,
+            dailyBestBeaten = engine.dailyBestBeaten,
             score = engine.score,
             coinsInSession = engine.coinsInSession,
             comboMultiplier = engine.comboMultiplier,
@@ -341,17 +344,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         destination = dest
     }
 
-    fun startGame() {
+    fun startGame(mode: RunMode = RunMode.STANDARD) {
         clearInput()
-        engine.startRun(System.currentTimeMillis())
+        engine.startRun(System.currentTimeMillis(), mode)
         destination = Destination.GAME
         if (profile.musicEnabled) audio.resumeMusic()
         beginLeaderboardRun()
     }
 
+    fun startDailyRun() = startGame(RunMode.DAILY)
+
+    /** "Play again" keeps the mode: a daily route restarts the same route. */
     fun restartGame() {
         clearInput()
-        engine.startRun(System.currentTimeMillis())
+        engine.startRun(System.currentTimeMillis(), engine.mode)
         beginLeaderboardRun()
     }
 
@@ -362,6 +368,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         submitState = SubmitState.Idle
         sessionId = null
         val token = ++runToken
+        if (engine.mode != RunMode.STANDARD) return
         // Retry a couple of times so a brief hiccup at run start doesn't cost the session.
         viewModelScope.launch {
             for (delayMs in longArrayOf(0L, 3000L, 8000L)) {
@@ -673,6 +680,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             missions = profile.missions.map(::snapshotOf),
             missionsBonusClaimed = profile.missionsBonusClaimed,
             lifetimeMissions = profile.lifetimeMissions,
+            dailyRunBestToday = if (profile.dailyRunDayKey == today()) profile.dailyRunBest else 0,
+            dailyRunAttemptsToday = if (profile.dailyRunDayKey == today()) profile.dailyRunAttempts else 0,
+            lifetimeDailyRuns = profile.lifetimeDailyRuns,
             dailyStreak = profile.dailyStreak,
             bestDailyStreak = profile.bestDailyStreak,
             ownedSkins = profile.ownedSkins.toSet(),
@@ -692,6 +702,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         val CONVOY_BANNER = HudBanner("wave_convoy", "wave_convoy_d", 0xFFFF3D3D)
         val FOG_BANNER = HudBanner("wave_fog", "wave_fog_d", 0xFFB8C0D8)
     }
+
+    private fun today(): Long = System.currentTimeMillis() / GameConfig.DAY_MS
 
     private fun showAchievementToast(id: String) {
         val key = Achievements.all.firstOrNull { it.id == id }?.nameKey ?: return

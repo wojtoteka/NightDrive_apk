@@ -39,6 +39,9 @@ data class ProfileSnapshot(
     val missions: List<MissionSnapshot> = emptyList(),
     val missionsBonusClaimed: Boolean = false,
     val lifetimeMissions: Int = 0,
+    val dailyRunBestToday: Int = 0,
+    val dailyRunAttemptsToday: Int = 0,
+    val lifetimeDailyRuns: Int = 0,
     val dailyStreak: Int = 0,
     val bestDailyStreak: Int = 0,
     val ownedSkins: Set<String> = setOf("classic"),
@@ -84,6 +87,8 @@ data class HudBanner(val titleKey: String, val subtitleKey: String, val color: L
 data class HudState(
     val phase: GamePhase = GamePhase.MENU,
     val paused: Boolean = false,
+    val dailyRun: Boolean = false,
+    val dailyBestBeaten: Boolean = false,
     val score: Int = 0,
     val coinsInSession: Int = 0,
     val comboMultiplier: Float = 1f,

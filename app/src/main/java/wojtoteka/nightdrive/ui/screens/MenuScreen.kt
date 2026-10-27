@@ -91,6 +91,11 @@ fun MenuScreen(vm: GameViewModel) {
                 Spacer(Modifier.height(10.dp))
                 Panel(Modifier.fillMaxWidth()) {
                     Column {
+                        NavRow(
+                            s["daily_run"], { vm.startDailyRun() },
+                            detail = if (p.dailyRunAttemptsToday > 0) "${s["best_short"]} ${p.dailyRunBestToday}" else s["daily_run_new"],
+                        )
+                        Rule()
                         NavRow(s["shop"], { vm.goTo(Destination.SHOP) })
                         Rule()
                         NavRow(s["leaderboard"], { vm.goTo(Destination.LEADERBOARD) })

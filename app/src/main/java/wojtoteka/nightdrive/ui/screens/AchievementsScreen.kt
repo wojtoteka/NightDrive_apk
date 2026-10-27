@@ -144,4 +144,5 @@ private fun achievementProgress(a: Achievement, p: ProfileSnapshot): Int = when 
     AchievementKind.POWERUP_COLLECT -> p.lifetimePowerups
     AchievementKind.NEAR_MISS -> p.lifetimeNearMisses
     AchievementKind.MISSIONS -> p.lifetimeMissions
+    AchievementKind.DAILY_RUNS -> p.lifetimeDailyRuns
 }

@@ -71,6 +71,10 @@ class GameStore(private val context: Context) {
             missions = Missions.decode(prefs[K.missions])
             missionsBonusClaimed = prefs[K.missionsBonus] ?: false
             lifetimeMissions = prefs[K.lifetimeMissions] ?: 0
+            dailyRunDayKey = prefs[K.dailyRunDay] ?: Long.MIN_VALUE
+            dailyRunBest = prefs[K.dailyRunBest] ?: 0
+            dailyRunAttempts = prefs[K.dailyRunAttempts] ?: 0
+            lifetimeDailyRuns = prefs[K.lifetimeDailyRuns] ?: 0
             sceneryRotation = prefs[K.sceneryRotation] ?: true
             musicEnabled = prefs[K.music] ?: true
             sfxEnabled = prefs[K.sfx] ?: true
@@ -116,6 +120,10 @@ class GameStore(private val context: Context) {
             e[K.missions] = Missions.encode(p.missions)
             e[K.missionsBonus] = p.missionsBonusClaimed
             e[K.lifetimeMissions] = p.lifetimeMissions
+            e[K.dailyRunDay] = p.dailyRunDayKey
+            e[K.dailyRunBest] = p.dailyRunBest
+            e[K.dailyRunAttempts] = p.dailyRunAttempts
+            e[K.lifetimeDailyRuns] = p.lifetimeDailyRuns
             // The single daily challenge from before 3.6 is gone for good.
             e.remove(K.legacyDailyDone)
             e.remove(K.legacyDailyProgress)
@@ -160,6 +168,9 @@ class GameStore(private val context: Context) {
         p.missions = if (p.dailyDayKey != Long.MIN_VALUE) Missions.forDay(p.dailyDayKey) else mutableListOf()
         p.missionsBonusClaimed = false
         p.lifetimeMissions = 0
+        p.dailyRunBest = 0
+        p.dailyRunAttempts = 0
+        p.lifetimeDailyRuns = 0
         save(p)
     }
 
@@ -196,6 +207,10 @@ class GameStore(private val context: Context) {
         val missions = stringPreferencesKey("daily_missions")
         val missionsBonus = booleanPreferencesKey("daily_missions_bonus")
         val lifetimeMissions = intPreferencesKey("lifetime_missions")
+        val dailyRunDay = longPreferencesKey("daily_run_day")
+        val dailyRunBest = intPreferencesKey("daily_run_best")
+        val dailyRunAttempts = intPreferencesKey("daily_run_attempts")
+        val lifetimeDailyRuns = intPreferencesKey("lifetime_daily_runs")
         val legacyDailyDone = booleanPreferencesKey("daily_completed")
         val legacyDailyProgress = intPreferencesKey("daily_progress")
         val legacyDailyGoal = intPreferencesKey("daily_goal")

@@ -15,6 +15,8 @@ import wojtoteka.nightdrive.engine.GameConfig
 import wojtoteka.nightdrive.engine.GameEngine
 import wojtoteka.nightdrive.engine.GameEvent
 import wojtoteka.nightdrive.engine.GamePhase
+import wojtoteka.nightdrive.engine.Rng
+import wojtoteka.nightdrive.engine.RunMode
 import wojtoteka.nightdrive.engine.WaveKind
 
 /**
@@ -25,9 +27,14 @@ import wojtoteka.nightdrive.engine.WaveKind
 class GameEngineTest {
 
     /** Runs the intro until the car is on screen and the simulation is actually PLAYING. */
-    private fun startedEngine(profile: PlayerProfile = PlayerProfile()): GameEngine {
-        val engine = GameEngine(profile)
-        engine.startRun(0L)
+    private fun startedEngine(
+        profile: PlayerProfile = PlayerProfile(),
+        mode: RunMode = RunMode.STANDARD,
+        rng: Rng = Rng(),
+        nowMs: Long = 0L,
+    ): GameEngine {
+        val engine = GameEngine(profile, rng)
+        engine.startRun(nowMs, mode)
         var guard = 0
         while (engine.phase == GamePhase.INTRO && guard++ < 2000) engine.update(0L)
         assertEquals(GamePhase.PLAYING, engine.phase)
@@ -219,6 +226,41 @@ class GameEngineTest {
         assertTrue(profile.missions[0].completed)
         assertEquals(1 + 10, profile.totalCoins)
         assertEquals(1, profile.lifetimeMissions)
+    }
+
+    /** Enemy and coin layout after [ticks] of a parked player, as comparable values. */
+    private fun worldAfter(engine: GameEngine, ticks: Int): List<Any> {
+        repeat(ticks) { if (engine.phase == GamePhase.PLAYING) engine.update(0L) }
+        return engine.enemies.map { listOf(it.x, it.y, it.hue, it.kind) } + engine.coins.map { listOf(it.x, it.y) }
+    }
+
+    @Test
+    fun dailyRouteIsTheSameForEveryPlayer() {
+        val day = 20_000L * GameConfig.DAY_MS
+        // Different devices (cosmetic seeds) and very different garages...
+        val rich = PlayerProfile().apply {
+            shieldCharges = 5; pendingMagnetStarts = 3; pendingSlowmoStarts = 3; boostDurationLevelAll = 3
+        }
+        val a = startedEngine(rich, RunMode.DAILY, Rng(1L), day)
+        val b = startedEngine(PlayerProfile(), RunMode.DAILY, Rng(2L), day)
+        // ...still see exactly the same road.
+        assertEquals(worldAfter(a, 900), worldAfter(b, 900))
+        assertEquals(3, rich.pendingMagnetStarts)
+        assertEquals(3, rich.pendingSlowmoStarts)
+    }
+
+    @Test
+    fun dailyRouteIgnoresTheGarageShieldAndRecordsTodaysBest() {
+        val profile = PlayerProfile().apply { shieldCharges = 3 }
+        val engine = startedEngine(profile, RunMode.DAILY)
+        assertEquals(0, engine.shieldCharges)
+        engine.enemies.clear()
+        engine.enemies += Enemy(engine.player.x, engine.player.y, 0f, 0)
+        engine.update(0L)
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(3, profile.shieldCharges)
+        assertEquals(1, profile.dailyRunAttempts)
+        assertEquals(1, profile.lifetimeDailyRuns)
     }
 
     @Test

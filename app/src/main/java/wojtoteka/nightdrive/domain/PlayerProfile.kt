@@ -71,6 +71,12 @@ class PlayerProfile {
     var missionsBonusClaimed: Boolean = false
     var lifetimeMissions: Int = 0
 
+    // Daily route: today's best and number of attempts (reset when the day changes)
+    var dailyRunDayKey: Long = Long.MIN_VALUE
+    var dailyRunBest: Int = 0
+    var dailyRunAttempts: Int = 0
+    var lifetimeDailyRuns: Int = 0
+
     // Settings
     var sceneryRotation: Boolean = true   // cycle owned world themes stage by stage during a run
     var musicEnabled: Boolean = true
@@ -115,6 +121,10 @@ class PlayerProfile {
         missions = other.missions.map { DailyMission(it.type, it.goal, it.reward, it.progress, it.completed) }.toMutableList()
         missionsBonusClaimed = other.missionsBonusClaimed
         lifetimeMissions = other.lifetimeMissions
+        dailyRunDayKey = other.dailyRunDayKey
+        dailyRunBest = other.dailyRunBest
+        dailyRunAttempts = other.dailyRunAttempts
+        lifetimeDailyRuns = other.lifetimeDailyRuns
         sceneryRotation = other.sceneryRotation
         musicEnabled = other.musicEnabled
         sfxEnabled = other.sfxEnabled
