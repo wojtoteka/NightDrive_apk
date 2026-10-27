@@ -194,12 +194,11 @@ private fun HudLeft(vm: GameViewModel, modifier: Modifier) {
             if (hud.comboMultiplier > 1f) ComboTag(hud.comboMultiplier)
             if (hud.nearMissFlash > 0) Tag("${s["near_miss"]} +${hud.nearMissFlash}", color = NearMissColor, filled = true)
         }
-        // Live daily progress for every goal type that advances mid-run (coins, combo, power-ups);
-        // the survival type only updates at crash, so it never renders here.
-        if (!hud.dailyCompleted && hud.dailyProgress > 0) {
+        // The unfinished daily mission closest to done, live as it moves.
+        hud.mission?.let { m ->
             Spacer(Modifier.height(8.dp))
             Text(
-                "${s["daily_challenge"].uppercase()}  ${hud.dailyProgress}/${hud.dailyGoal}",
+                "${s["mission"].uppercase()} · ${s[m.type.shortKey].uppercase()}  ${m.progress}/${m.goal}",
                 style = NDType.Overline.copy(shadow = hudShadow),
                 color = NDColors.TextDim,
             )

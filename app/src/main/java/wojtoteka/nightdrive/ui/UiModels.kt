@@ -2,6 +2,7 @@ package wojtoteka.nightdrive.ui
 
 import androidx.compose.runtime.Immutable
 import wojtoteka.nightdrive.domain.Language
+import wojtoteka.nightdrive.domain.MissionType
 import wojtoteka.nightdrive.domain.PowerUpType
 import wojtoteka.nightdrive.engine.GamePhase
 
@@ -35,10 +36,9 @@ data class ProfileSnapshot(
     val lifetimeBoostsUsed: Int = 0,
     val lifetimePowerups: Int = 0,
     val lifetimeNearMisses: Int = 0,
-    val dailyType: Int = 0,
-    val dailyGoal: Int = 30,
-    val dailyProgress: Int = 0,
-    val dailyCompleted: Boolean = false,
+    val missions: List<MissionSnapshot> = emptyList(),
+    val missionsBonusClaimed: Boolean = false,
+    val lifetimeMissions: Int = 0,
     val dailyStreak: Int = 0,
     val bestDailyStreak: Int = 0,
     val ownedSkins: Set<String> = setOf("classic"),
@@ -52,6 +52,19 @@ data class ProfileSnapshot(
     val hapticsEnabled: Boolean = true,
     val language: Language = Language.SYSTEM,
 )
+
+@Immutable
+data class MissionSnapshot(
+    val type: MissionType,
+    val goal: Int,
+    val progress: Int,
+    val completed: Boolean,
+    val reward: Int,
+)
+
+/** Slide-down notice at the top of the screen. The title may hold a %d filled from [titleArg]. */
+@Immutable
+data class Toast(val overlineKey: String, val titleKey: String, val titleArg: String = "", val detail: String = "")
 
 @Immutable
 data class HudPowerUp(
@@ -80,9 +93,7 @@ data class HudState(
     val banner: HudBanner? = null,
     val bannerVisible: Boolean = false,
     val powerups: List<HudPowerUp> = emptyList(),
-    val dailyType: Int = 0,
-    val dailyGoal: Int = 30,
-    val dailyProgress: Int = 0,
-    val dailyCompleted: Boolean = false,
+    /** The unfinished daily mission closest to done (with some progress), shown under the score. */
+    val mission: MissionSnapshot? = null,
     val highScore: Int = 0,
 )

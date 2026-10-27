@@ -116,7 +116,6 @@ object GameConfig {
     const val SPEED_MULT_MAX = 2.5f
 
     // --- Daily ---
-    const val DAILY_REWARD = 25
     const val DAY_MS = 86_400_000L
 
     fun comboMultiplier(streak: Int): Float = when {

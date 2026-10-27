@@ -3,6 +3,9 @@ package wojtoteka.nightdrive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import wojtoteka.nightdrive.domain.DailyMission
+import wojtoteka.nightdrive.domain.MissionType
+import wojtoteka.nightdrive.domain.Missions
 import wojtoteka.nightdrive.domain.PlayerProfile
 import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.engine.Coin
@@ -176,6 +179,46 @@ class GameEngineTest {
         val ids = WorldThemes.rotation(setOf("sunset", "aurora", "inferno"), "inferno").map { it.id }
         assertEquals(listOf("inferno", "sunset", "aurora"), ids)
         assertEquals(1, WorldThemes.rotation(setOf("sunset"), "sunset").size)
+    }
+
+    @Test
+    fun missionsAreTheSameForEveryoneOnADay() {
+        val a = Missions.forDay(20_000L).map { it.type to it.goal }
+        val b = Missions.forDay(20_000L).map { it.type to it.goal }
+        assertEquals(a, b)
+        assertEquals(Missions.COUNT, a.map { it.first }.toSet().size)
+    }
+
+    @Test
+    fun missionsSurviveStorage() {
+        val missions = Missions.forDay(20_001L).also { it[1].progress = 4; it[2].completed = true }
+        val back = Missions.decode(Missions.encode(missions))
+        assertEquals(missions.map { listOf(it.type, it.goal, it.reward, it.progress, it.completed) },
+            back.map { listOf(it.type, it.goal, it.reward, it.progress, it.completed) })
+        assertTrue(Missions.decode("garbage").isEmpty())
+    }
+
+    @Test
+    fun finishingAMissionPaysItsReward() {
+        val profile = PlayerProfile()
+        val engine = startedEngine(profile)
+        profile.missions = mutableListOf(
+            DailyMission(MissionType.COINS, 1, 10),
+            DailyMission(MissionType.SCORE, 10_000, 15),
+            DailyMission(MissionType.SURVIVE, 10_000, 25),
+        )
+        engine.coins.clear()
+        engine.coins += Coin(engine.player.x, engine.player.y - 10f, 0f)
+        var completed = false
+        var guard = 0
+        while (engine.coinsInSession == 0 && guard++ < 300) {
+            engine.update(0L)
+            completed = completed || engine.events.any { it is GameEvent.MissionCompleted }
+        }
+        assertTrue(completed)
+        assertTrue(profile.missions[0].completed)
+        assertEquals(1 + 10, profile.totalCoins)
+        assertEquals(1, profile.lifetimeMissions)
     }
 
     @Test

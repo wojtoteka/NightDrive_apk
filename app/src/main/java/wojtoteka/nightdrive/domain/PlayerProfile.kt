@@ -63,14 +63,13 @@ class PlayerProfile {
     // Achievements (ids of unlocked ones)
     var unlockedAchievements: MutableSet<String> = mutableSetOf()
 
-    // Daily challenge
+    // Daily missions (see Missions): three per UTC day, plus a bonus for finishing all of them
     var dailyDayKey: Long = Long.MIN_VALUE
     var dailyStreak: Int = 0
     var bestDailyStreak: Int = 0
-    var dailyCompleted: Boolean = false
-    var dailyProgress: Int = 0
-    var dailyGoal: Int = 30
-    var dailyType: Int = 0             // 0 = collect coins, 1 = survive seconds
+    var missions: MutableList<DailyMission> = mutableListOf()
+    var missionsBonusClaimed: Boolean = false
+    var lifetimeMissions: Int = 0
 
     // Settings
     var sceneryRotation: Boolean = true   // cycle owned world themes stage by stage during a run
@@ -113,10 +112,9 @@ class PlayerProfile {
         dailyDayKey = other.dailyDayKey
         dailyStreak = other.dailyStreak
         bestDailyStreak = other.bestDailyStreak
-        dailyCompleted = other.dailyCompleted
-        dailyProgress = other.dailyProgress
-        dailyGoal = other.dailyGoal
-        dailyType = other.dailyType
+        missions = other.missions.map { DailyMission(it.type, it.goal, it.reward, it.progress, it.completed) }.toMutableList()
+        missionsBonusClaimed = other.missionsBonusClaimed
+        lifetimeMissions = other.lifetimeMissions
         sceneryRotation = other.sceneryRotation
         musicEnabled = other.musicEnabled
         sfxEnabled = other.sfxEnabled

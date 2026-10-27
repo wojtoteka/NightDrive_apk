@@ -15,14 +15,21 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.Missions
+import wojtoteka.nightdrive.domain.Strings
 import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
+import wojtoteka.nightdrive.ui.MissionSnapshot
+import wojtoteka.nightdrive.ui.components.CheckGlyph
+import wojtoteka.nightdrive.ui.components.CoinIcon
 import wojtoteka.nightdrive.ui.components.CoinReadout
 import wojtoteka.nightdrive.ui.components.GlowText
 import wojtoteka.nightdrive.ui.components.Meter
@@ -61,8 +68,8 @@ fun MenuScreen(vm: GameViewModel) {
         }
 
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            // Left: logo, records, daily
-            Column(Modifier.weight(1f)) {
+            // Left: logo, records, missions. Scrolls if a short screen can't fit all three missions.
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 GlowText("NIGHT", NDType.Brand, color = NDColors.LogoWhite, glow = NDColors.LogoCyan)
                 GlowText("DRIVE", NDType.Brand, color = NDColors.LogoMagenta, glow = NDColors.LogoMagenta)
                 Spacer(Modifier.height(6.dp))
@@ -71,7 +78,7 @@ fun MenuScreen(vm: GameViewModel) {
                 Column(Modifier.widthIn(max = 340.dp)) {
                     RecordsPanel(vm)
                     Spacer(Modifier.height(8.dp))
-                    DailyPanel(vm)
+                    MissionsPanel(vm)
                 }
             }
 
@@ -119,43 +126,61 @@ private fun RecordsPanel(vm: GameViewModel) {
 }
 
 @Composable
-private fun DailyPanel(vm: GameViewModel) {
+private fun MissionsPanel(vm: GameViewModel) {
     val s = LocalStrings.current
     val p = vm.profileState
-    // 0 = collect coins, 1 = survive seconds, 2 = hit a combo in one run, 3 = collect power-ups
-    val title = when (p.dailyType) {
-        0 -> s["daily_collect"]
-        1 -> s["daily_survive"]
-        2 -> s["daily_combo"]
-        else -> s["daily_powerups"]
-    }
-    val unitSuffix = when (p.dailyType) {
-        0 -> " ${s["coins_word"]}"
-        1 -> " ${s["seconds_word"]}"
-        else -> ""
-    }
-    val fraction = if (p.dailyGoal > 0) p.dailyProgress.toFloat() / p.dailyGoal else 0f
-    val done = p.dailyCompleted
-    Panel(Modifier.fillMaxWidth(), edge = if (done) NDColors.Positive else null) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+    val allDone = p.missions.isNotEmpty() && p.missions.all { it.completed }
+    Panel(Modifier.fillMaxWidth(), edge = if (allDone) NDColors.Positive else null) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Overline(s["daily_challenge"], Modifier.weight(1f))
+                Overline(s["daily_missions"], Modifier.weight(1f))
                 Overline("${s["daily_streak"]} ${p.dailyStreak}", color = NDColors.TextDim)
             }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(title, style = NDType.Heading, color = NDColors.Text, modifier = Modifier.weight(1f))
-                Text(
-                    if (done) s["daily_done"].uppercase() else "${p.dailyProgress}/${p.dailyGoal}$unitSuffix",
-                    style = if (done) NDType.Overline else NDType.ReadoutSmall,
-                    color = if (done) NDColors.Positive else NDColors.TextDim,
-                )
+            for (m in p.missions) {
+                Spacer(Modifier.height(9.dp))
+                MissionRow(m)
             }
             Spacer(Modifier.height(10.dp))
-            Meter(if (done) 1f else fraction, color = if (done) NDColors.Positive else NDColors.Accent)
+            Overline(
+                if (allDone) "${s["daily_bonus"]} +${Missions.ALL_DONE_BONUS} · ${s["daily_done"]}"
+                else "${s["missions_bonus_hint"]} +${Missions.ALL_DONE_BONUS}",
+                color = if (allDone) NDColors.Positive else NDColors.TextFaint,
+            )
         }
     }
 }
+
+@Composable
+private fun MissionRow(m: MissionSnapshot) {
+    val s = LocalStrings.current
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                missionTitle(s, m),
+                style = NDType.Label,
+                color = if (m.completed) NDColors.TextDim else NDColors.Text,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(10.dp))
+            if (m.completed) CheckGlyph(NDColors.Positive, 12.dp)
+            else Text("${m.progress}/${m.goal}", style = NDType.Caption, color = NDColors.TextDim)
+            Spacer(Modifier.width(10.dp))
+            Text("+${m.reward}", style = NDType.Caption, color = if (m.completed) NDColors.Positive else NDColors.TextFaint)
+            Spacer(Modifier.width(4.dp))
+            CoinIcon(12)
+        }
+        Spacer(Modifier.height(5.dp))
+        Meter(
+            if (m.completed) 1f else m.progress.toFloat() / m.goal,
+            color = if (m.completed) NDColors.Positive else NDColors.Accent,
+            height = 4.dp,
+        )
+    }
+}
+
+/** "Collect 45 coins": the mission's title with its goal filled in. */
+fun missionTitle(s: Strings, m: MissionSnapshot): String = s[m.type.titleKey].replace("%d", m.goal.toString())
 
 /**
  * "45s" below a minute, then "2:16". The colon form is deliberate - with the pixel display font

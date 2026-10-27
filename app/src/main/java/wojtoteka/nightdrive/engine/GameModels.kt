@@ -1,5 +1,6 @@
 package wojtoteka.nightdrive.engine
 
+import wojtoteka.nightdrive.domain.MissionType
 import wojtoteka.nightdrive.domain.PowerUpType
 
 /** High-level phase of the simulation. Menu/shop/etc. navigation lives in the UI layer. */
@@ -91,4 +92,6 @@ sealed interface GameEvent {
     data object Crash : GameEvent
     data object NewHighScore : GameEvent
     data class AchievementUnlocked(val id: String) : GameEvent
+    data class MissionCompleted(val type: MissionType, val goal: Int, val reward: Int) : GameEvent
+    data class AllMissionsCompleted(val bonus: Int) : GameEvent
 }

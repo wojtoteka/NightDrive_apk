@@ -13,6 +13,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import wojtoteka.nightdrive.domain.AchievementKind
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.Missions
 import wojtoteka.nightdrive.domain.PlayerProfile
 import wojtoteka.nightdrive.domain.Skins
 import wojtoteka.nightdrive.domain.WorldThemes
@@ -66,10 +67,10 @@ class GameStore(private val context: Context) {
             dailyDayKey = prefs[K.dailyDay] ?: Long.MIN_VALUE
             dailyStreak = prefs[K.dailyStreak] ?: 0
             bestDailyStreak = prefs[K.bestDaily] ?: 0
-            dailyCompleted = prefs[K.dailyDone] ?: false
-            dailyProgress = prefs[K.dailyProgress] ?: 0
-            dailyGoal = prefs[K.dailyGoal] ?: 30
-            dailyType = prefs[K.dailyType] ?: 0
+            // Saves from before missions have none stored: the engine fills in today's three.
+            missions = Missions.decode(prefs[K.missions])
+            missionsBonusClaimed = prefs[K.missionsBonus] ?: false
+            lifetimeMissions = prefs[K.lifetimeMissions] ?: 0
             sceneryRotation = prefs[K.sceneryRotation] ?: true
             musicEnabled = prefs[K.music] ?: true
             sfxEnabled = prefs[K.sfx] ?: true
@@ -112,10 +113,14 @@ class GameStore(private val context: Context) {
             e[K.dailyDay] = p.dailyDayKey
             e[K.dailyStreak] = p.dailyStreak
             e[K.bestDaily] = p.bestDailyStreak
-            e[K.dailyDone] = p.dailyCompleted
-            e[K.dailyProgress] = p.dailyProgress
-            e[K.dailyGoal] = p.dailyGoal
-            e[K.dailyType] = p.dailyType
+            e[K.missions] = Missions.encode(p.missions)
+            e[K.missionsBonus] = p.missionsBonusClaimed
+            e[K.lifetimeMissions] = p.lifetimeMissions
+            // The single daily challenge from before 3.6 is gone for good.
+            e.remove(K.legacyDailyDone)
+            e.remove(K.legacyDailyProgress)
+            e.remove(K.legacyDailyGoal)
+            e.remove(K.legacyDailyType)
             e[K.sceneryRotation] = p.sceneryRotation
             e[K.music] = p.musicEnabled
             e[K.sfx] = p.sfxEnabled
@@ -152,8 +157,9 @@ class GameStore(private val context: Context) {
         p.ownedThemes = mutableSetOf(WorldThemes.DEFAULT_ID)
         p.selectedTheme = WorldThemes.DEFAULT_ID
         p.unlockedAchievements = mutableSetOf()
-        p.dailyCompleted = false
-        p.dailyProgress = 0
+        p.missions = if (p.dailyDayKey != Long.MIN_VALUE) Missions.forDay(p.dailyDayKey) else mutableListOf()
+        p.missionsBonusClaimed = false
+        p.lifetimeMissions = 0
         save(p)
     }
 
@@ -187,10 +193,13 @@ class GameStore(private val context: Context) {
         val dailyDay = longPreferencesKey("daily_day")
         val dailyStreak = intPreferencesKey("daily_streak")
         val bestDaily = intPreferencesKey("best_daily_streak")
-        val dailyDone = booleanPreferencesKey("daily_completed")
-        val dailyProgress = intPreferencesKey("daily_progress")
-        val dailyGoal = intPreferencesKey("daily_goal")
-        val dailyType = intPreferencesKey("daily_type")
+        val missions = stringPreferencesKey("daily_missions")
+        val missionsBonus = booleanPreferencesKey("daily_missions_bonus")
+        val lifetimeMissions = intPreferencesKey("lifetime_missions")
+        val legacyDailyDone = booleanPreferencesKey("daily_completed")
+        val legacyDailyProgress = intPreferencesKey("daily_progress")
+        val legacyDailyGoal = intPreferencesKey("daily_goal")
+        val legacyDailyType = intPreferencesKey("daily_type")
         val sceneryRotation = booleanPreferencesKey("scenery_rotation")
         val music = booleanPreferencesKey("music_enabled")
         val sfx = booleanPreferencesKey("sfx_enabled")

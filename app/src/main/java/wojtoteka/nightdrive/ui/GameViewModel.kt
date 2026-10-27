@@ -14,6 +14,8 @@ import wojtoteka.nightdrive.audio.AudioController
 import wojtoteka.nightdrive.audio.Sfx
 import wojtoteka.nightdrive.data.GameStore
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.DailyMission
+import wojtoteka.nightdrive.domain.Missions
 import wojtoteka.nightdrive.domain.Language
 import wojtoteka.nightdrive.domain.PlayerProfile
 import wojtoteka.nightdrive.domain.PowerUpType
@@ -52,7 +54,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     val frameTick = mutableIntStateOf(0)
     var hud by mutableStateOf(HudState()); private set
     var profileState by mutableStateOf(ProfileSnapshot()); private set
-    var achievementToastKey by mutableStateOf<String?>(null); private set
+    var toast by mutableStateOf<Toast?>(null); private set
     var language by mutableStateOf(Language.SYSTEM); private set
 
     // Online leaderboard
@@ -153,7 +155,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 "coins100", "coins1000", "score50", "score100", "score250",
                 "streak5", "streak12", "survive60", "survive120", "daily7",
             )
-            dailyType = 0; dailyGoal = 25; dailyProgress = 18; dailyCompleted = false
+            missions = Missions.forDay(dailyDayKey).also {
+                it[0].progress = it[0].goal; it[0].completed = true
+                it[1].progress = it[1].goal * 2 / 3
+            }
             dailyStreak = 6; bestDailyStreak = 9
         }
         showcaseLanguage?.let { profile.language = it.code; language = it }
@@ -222,6 +227,13 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     haptics.success()
                     showAchievementToast(ev.id)
                 }
+                is GameEvent.MissionCompleted -> {
+                    audio.play(Sfx.COIN, 0.6f, rate = 1.25f)
+                    haptics.success()
+                    showToast(Toast("mission_done", ev.type.titleKey, ev.goal.toString(), "+${ev.reward}"))
+                }
+                is GameEvent.AllMissionsCompleted ->
+                    showToast(Toast("missions_all_done", "daily_bonus", detail = "+${ev.bonus}"))
             }
         }
     }
@@ -254,13 +266,23 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             banner = lastBanner,
             bannerVisible = banner != null,
             powerups = pus,
-            dailyType = profile.dailyType,
-            dailyGoal = profile.dailyGoal,
-            dailyProgress = profile.dailyProgress,
-            dailyCompleted = profile.dailyCompleted,
+            mission = hudMission(),
             highScore = profile.highScore,
         )
     }
+
+    private fun hudMission(): MissionSnapshot? {
+        var best: DailyMission? = null
+        val list = profile.missions
+        for (i in list.indices) { // runs every frame: no iterator
+            val m = list[i]
+            if (m.completed || m.progress <= 0) continue
+            if (best == null || m.progress.toFloat() / m.goal > best.progress.toFloat() / best.goal) best = m
+        }
+        return best?.let(::snapshotOf)
+    }
+
+    private fun snapshotOf(m: DailyMission) = MissionSnapshot(m.type, m.goal, m.progress, m.completed, m.reward)
 
     private var lastBanner: HudBanner? = null
     private var stageBanner: HudBanner? = null
@@ -648,10 +670,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             lifetimeBoostsUsed = profile.lifetimeBoostsUsed,
             lifetimePowerups = profile.lifetimePowerups,
             lifetimeNearMisses = profile.lifetimeNearMisses,
-            dailyType = profile.dailyType,
-            dailyGoal = profile.dailyGoal,
-            dailyProgress = profile.dailyProgress,
-            dailyCompleted = profile.dailyCompleted,
+            missions = profile.missions.map(::snapshotOf),
+            missionsBonusClaimed = profile.missionsBonusClaimed,
+            lifetimeMissions = profile.lifetimeMissions,
             dailyStreak = profile.dailyStreak,
             bestDailyStreak = profile.bestDailyStreak,
             ownedSkins = profile.ownedSkins.toSet(),
@@ -674,8 +695,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun showAchievementToast(id: String) {
         val key = Achievements.all.firstOrNull { it.id == id }?.nameKey ?: return
-        achievementToastKey = key
+        showToast(Toast("achievement_unlocked", key))
+    }
+
+    private fun showToast(t: Toast) {
+        toast = t
         toastJob?.cancel()
-        toastJob = viewModelScope.launch { delay(3500); achievementToastKey = null }
+        toastJob = viewModelScope.launch { delay(3500); toast = null }
     }
 }

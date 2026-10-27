@@ -3,6 +3,9 @@ package wojtoteka.nightdrive.engine
 import wojtoteka.nightdrive.domain.Achievement
 import wojtoteka.nightdrive.domain.AchievementKind
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.DailyMission
+import wojtoteka.nightdrive.domain.MissionType
+import wojtoteka.nightdrive.domain.Missions
 import wojtoteka.nightdrive.domain.PlayerProfile
 import wojtoteka.nightdrive.domain.PowerUpType
 import wojtoteka.nightdrive.engine.GameConfig as C
@@ -51,6 +54,8 @@ class GameEngine(
     var gameOverSlide = 0f; private set   // b_y in the original: game-over panel slide-in
     var nearMissesInRun = 0; private set
     var wavesInRun = 0; private set
+    /** The shield has blocked a hit this run (ends the "clean run" mission's count). */
+    private var shieldUsedInRun = false
     var stage = 0; private set
 
     /** Time spent in the current [stage] (drives the theme cross-fade). */
@@ -159,6 +164,7 @@ class GameEngine(
         nearMissesInRun = 0; lastNearMissMs = 0L; lastNearMissPoints = 0
         wave = null; lastWave = null; wavesInRun = 0; nextWaveRunMs = C.WAVES_START_MS
         stage = 0; streakStartMs = 0L
+        shieldUsedInRun = false
         clockMs = 0L; clockFrac = 0f; enemyTimer = 0L; coinTimer = 0L; powerupTimer = 0L; lastCoinMs = 0L
         enemySpawnDelay = C.ENEMY_START_DELAY_MS
         coinSpawnDelay = 0f
@@ -248,6 +254,7 @@ class GameEngine(
             profile.highScore = score
             if (!newHighAnnounced) { events += GameEvent.NewHighScore; newHighAnnounced = true }
         }
+        trackRunMissions()
     }
 
     // ---- Player ----------------------------------------------------------------------------
@@ -298,6 +305,7 @@ class GameEngine(
                 if (profile.shieldCharges > 0) {
                     profile.shieldCharges -= 1
                     profile.lifetimeShieldBlocks += 1
+                    shieldUsedInRun = true
                     events += GameEvent.ShieldBlocked
                     enemies.removeAt(i)
                     continue
@@ -354,6 +362,7 @@ class GameEngine(
         bumpStreak()
         nearMissesInRun += 1
         profile.lifetimeNearMisses += 1
+        addMission(MissionType.NEAR_MISS, 1)
         lastNearMissMs = clockMs
         lastNearMissPoints = value
         spawnNearMissSparks(e)
@@ -494,10 +503,7 @@ class GameEngine(
         bumpStreak()
         spawnCoinSparkle()
         events += GameEvent.CoinCollected
-        if (!profile.dailyCompleted && profile.dailyType == 0) {
-            profile.dailyProgress += 1
-            if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
-        }
+        addMission(MissionType.COINS, 1)
         checkAchievements()
     }
 
@@ -505,11 +511,7 @@ class GameEngine(
     private fun bumpStreak() {
         streak += 1
         if (streak > profile.longestStreak) profile.longestStreak = streak
-        // Combo daily tracks the best streak reached today (across runs).
-        if (!profile.dailyCompleted && profile.dailyType == 2) {
-            if (streak > profile.dailyProgress) profile.dailyProgress = streak
-            if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
-        }
+        bestMission(MissionType.COMBO, streak)
     }
 
     private fun maybeSpawnCoin() {
@@ -534,10 +536,7 @@ class GameEngine(
                     p.collected = true
                     applyPowerup(p.type)
                     profile.lifetimePowerups += 1
-                    if (!profile.dailyCompleted && profile.dailyType == 3) {
-                        profile.dailyProgress += 1
-                        if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
-                    }
+                    addMission(MissionType.POWERUPS, 1)
                     checkAchievements()
                     events += GameEvent.PowerUpCollected(p.type)
                 }
@@ -642,10 +641,7 @@ class GameEngine(
         val survived = survivalSeconds
         if (survived > profile.longestStreakTimeSec) profile.longestStreakTimeSec = survived
         streak = 0
-        if (!profile.dailyCompleted && profile.dailyType == 1) {
-            if (survived > profile.dailyProgress) profile.dailyProgress = survived
-            if (profile.dailyProgress >= profile.dailyGoal) completeDaily()
-        }
+        trackRunMissions()
         checkAchievements()
         spawnCrashParticles()
         gameOverSlide = 370f
@@ -688,31 +684,67 @@ class GameEngine(
         powerups += PowerUp(132f, -55f, PowerUpType.MAGNET)
     }
 
-    // ---- Daily -----------------------------------------------------------------------------
+    // ---- Daily missions --------------------------------------------------------------------
 
     fun refreshDaily(realNowMs: Long) {
         val today = realNowMs / C.DAY_MS
         val p = profile
-        if (p.dailyDayKey == today) return
+        if (p.dailyDayKey == today) {
+            // A save from before missions existed: same day, but nothing to show yet.
+            if (p.missions.isEmpty()) p.missions = Missions.forDay(today)
+            return
+        }
         val prev = p.dailyDayKey
         if (prev != Long.MIN_VALUE && today - prev == 1L) p.dailyStreak += 1
         else p.dailyStreak = 1
         if (p.dailyStreak > p.bestDailyStreak) p.bestDailyStreak = p.dailyStreak
         p.dailyDayKey = today
-        p.dailyCompleted = false
-        p.dailyProgress = 0
-        // 0 = collect coins, 1 = survive seconds, 2 = hit a combo in one run, 3 = collect power-ups
-        p.dailyType = rng.intInRange(0, 3)
-        p.dailyGoal = when (p.dailyType) {
-            2 -> rng.intInRange(8, 16)
-            3 -> rng.intInRange(3, 6)
-            else -> rng.intInRange(25, 60)
+        p.missions = Missions.forDay(today)
+        p.missionsBonusClaimed = false
+    }
+
+    /** Adds [amount] to every unfinished mission of [type] (the ones that sum across runs). */
+    private fun addMission(type: MissionType, amount: Int) {
+        val list = profile.missions
+        for (i in list.indices) {
+            val m = list[i]
+            if (m.type != type || m.completed) continue
+            m.progress += amount
+            if (m.progress >= m.goal) completeMission(m)
         }
     }
 
-    private fun completeDaily() {
-        profile.dailyCompleted = true
-        profile.totalCoins += C.DAILY_REWARD
+    /** Raises a best-single-run mission of [type] to [value] if this run beats the day's best. */
+    private fun bestMission(type: MissionType, value: Int) {
+        val list = profile.missions
+        for (i in list.indices) {
+            val m = list[i]
+            if (m.type != type || m.completed || value <= m.progress) continue
+            m.progress = value
+            if (m.progress >= m.goal) completeMission(m)
+        }
+    }
+
+    /** Missions that follow the run as a whole, updated every tick so the HUD stays live. */
+    private fun trackRunMissions() {
+        val survived = survivalSeconds
+        bestMission(MissionType.SCORE, score)
+        bestMission(MissionType.SURVIVE, survived)
+        if (!shieldUsedInRun) bestMission(MissionType.CLEAN, survived)
+    }
+
+    private fun completeMission(m: DailyMission) {
+        m.progress = m.goal
+        m.completed = true
+        profile.totalCoins += m.reward
+        profile.lifetimeMissions += 1
+        events += GameEvent.MissionCompleted(m.type, m.goal, m.reward)
+        if (!profile.missionsBonusClaimed && profile.missions.all { it.completed }) {
+            profile.missionsBonusClaimed = true
+            profile.totalCoins += Missions.ALL_DONE_BONUS
+            events += GameEvent.AllMissionsCompleted(Missions.ALL_DONE_BONUS)
+        }
+        checkAchievements()
     }
 
     // ---- Achievements ----------------------------------------------------------------------
@@ -740,6 +772,7 @@ class GameEngine(
         AchievementKind.BOOST_USED -> profile.lifetimeBoostsUsed >= a.goal
         AchievementKind.POWERUP_COLLECT -> profile.lifetimePowerups >= a.goal
         AchievementKind.NEAR_MISS -> profile.lifetimeNearMisses >= a.goal
+        AchievementKind.MISSIONS -> profile.lifetimeMissions >= a.goal
     }
 
     // ---- Particles & stars -----------------------------------------------------------------
