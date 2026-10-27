@@ -200,6 +200,34 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
         frameTick.intValue++
         updateHud()
+        updateMusicMood(dtMs)
+    }
+
+    /**
+     * The music follows the run: quieter in menus and on pause, ducked and wound down after a crash,
+     * swelling with the combo multiplier and during waves, tape-slowed while slow-mo is on.
+     */
+    private fun updateMusicMood(dtMs: Float) {
+        var volume = MUSIC_MENU
+        var speed = 1f
+        if (destination == Destination.GAME) when {
+            engine.phase == GamePhase.GAME_OVER -> { volume = MUSIC_CRASH; speed = 0.9f }
+            engine.paused -> volume = MUSIC_PAUSED
+            engine.phase == GamePhase.PLAYING -> {
+                val m = engine.comboMultiplier
+                val swell = when {
+                    m >= 4f -> 0.16f
+                    m >= 3f -> 0.12f
+                    m >= 2f -> 0.08f
+                    m > 1f -> 0.04f
+                    else -> 0f
+                }
+                volume = MUSIC_DRIVE + swell + if (engine.wave != null) 0.06f else 0f
+                if (engine.slowmoActive) speed = 0.85f
+            }
+        }
+        audio.setMusicTarget(volume, speed)
+        audio.tickMusic(dtMs)
     }
 
     private fun drainEvents() {
@@ -699,6 +727,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        const val MUSIC_MENU = 0.6f
+        const val MUSIC_DRIVE = 0.52f
+        const val MUSIC_PAUSED = 0.25f
+        const val MUSIC_CRASH = 0.22f
         val CONVOY_BANNER = HudBanner("wave_convoy", "wave_convoy_d", 0xFFFF3D3D)
         val FOG_BANNER = HudBanner("wave_fog", "wave_fog_d", 0xFFB8C0D8)
     }
