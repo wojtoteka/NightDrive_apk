@@ -447,7 +447,10 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
         SubmitState.Submitting -> s["submitting"] to NDColors.TextDim
         SubmitState.Failed -> s["submit_failed"] to NDColors.Danger
         SubmitState.Offline -> s["submit_offline"] to NDColors.TextFaint
-        SubmitState.Idle -> null
+        SubmitState.Unverified -> s["submit_unverified"] to NDColors.Danger
+        SubmitState.UpdateRequired -> s["update_required"] to NDColors.Danger
+        // The entry field stays open for another name (see below).
+        SubmitState.NameTaken, SubmitState.Idle -> null
     }
     if (line != null) {
         Spacer(Modifier.height(10.dp))
@@ -461,7 +464,8 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
     Spacer(Modifier.height(8.dp))
     Panel(Modifier.fillMaxWidth(), edge = NDColors.Accent) {
         Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)) {
-            Overline(s["you_qualified"], color = NDColors.Accent)
+            if (vm.submitState == SubmitState.NameTaken) Overline(s["name_taken"], color = NDColors.Danger)
+            else Overline(s["you_qualified"], color = NDColors.Accent)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(

@@ -81,6 +81,7 @@ class GameStore(private val context: Context) {
             hapticsEnabled = prefs[K.haptics] ?: true
             language = prefs[K.language] ?: "system"
             playerName = prefs[K.playerName] ?: ""
+            playerId = prefs[K.playerId] ?: ""
             // Keep the owned sets consistent with the free defaults.
             if (!ownedSkins.contains(Skins.DEFAULT_ID)) ownedSkins.add(Skins.DEFAULT_ID)
             if (!ownedThemes.contains(WorldThemes.DEFAULT_ID)) ownedThemes.add(WorldThemes.DEFAULT_ID)
@@ -135,6 +136,7 @@ class GameStore(private val context: Context) {
             e[K.haptics] = p.hapticsEnabled
             e[K.language] = p.language
             e[K.playerName] = p.playerName
+            if (p.playerId.isNotEmpty()) e[K.playerId] = p.playerId
         }
     }
 
@@ -221,5 +223,6 @@ class GameStore(private val context: Context) {
         val haptics = booleanPreferencesKey("haptics_enabled")
         val language = stringPreferencesKey("language")
         val playerName = stringPreferencesKey("player_name")
+        val playerId = stringPreferencesKey("player_id")
     }
 }

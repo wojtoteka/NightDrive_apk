@@ -45,7 +45,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private val store = GameStore(app)
     private val audio = AudioController(app)
     private val haptics = wojtoteka.nightdrive.util.Haptics(app)
-    private val leaderboardApi = wojtoteka.nightdrive.net.LeaderboardApi()
+    private val leaderboardApi = wojtoteka.nightdrive.net.LeaderboardApi(app)
 
     private val profile = PlayerProfile()
     val engine = GameEngine(profile)
@@ -107,13 +107,14 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         audio.loadSfx()
         viewModelScope.launch {
             profile.copyFrom(store.load())
+            if (profile.playerId.isBlank()) profile.playerId = java.util.UUID.randomUUID().toString()
             applySettings()
             language = Language.fromCode(profile.language)
             engine.enterMenu(System.currentTimeMillis())
             refreshProfileState()
             isReady = true
             if (profile.musicEnabled) audio.startMusic()
-            store.save(profile) // persist any daily rollover done in enterMenu
+            store.save(profile) // persist any daily rollover done in enterMenu (and a new player id)
             if (showcase) applyShowcase()
             if (demoRequested) stageDemo()
         }
@@ -452,7 +453,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun submitNickname(name: String) {
-        val trimmed = name.trim()
+        // Same whitespace rule as the server, so the stored name is exactly what was typed.
+        val trimmed = name.trim().replace(Regex("\\s+"), " ")
         if (trimmed.isEmpty()) return
         profile.playerName = trimmed
         persist()
@@ -462,14 +464,19 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             val sid = sessionId ?: leaderboardApi.startSession().also { sessionId = it }
             if (sid == null) { submitState = SubmitState.Offline; return@launch }
             submitState = try {
-                val r = leaderboardApi.submit(sid, trimmed, gameOverScore)
-                if (r.accepted) {
-                    sessionId = null
-                    scoreQualifies = false
-                    fetchLeaderboard()
-                    SubmitState.Done(r.rank)
-                } else {
-                    SubmitState.Failed
+                val r = leaderboardApi.submit(sid, trimmed, gameOverScore, profile.playerId)
+                when {
+                    r.accepted -> {
+                        sessionId = null
+                        scoreQualifies = false
+                        fetchLeaderboard()
+                        SubmitState.Done(r.rank)
+                    }
+                    // The server rolled back: same session, the player just picks another name.
+                    r.error == "name_taken" -> SubmitState.NameTaken
+                    r.error == "untrusted_app" -> SubmitState.Unverified
+                    r.error == "update_required" -> SubmitState.UpdateRequired
+                    else -> SubmitState.Failed
                 }
             } catch (_: Exception) {
                 SubmitState.Offline

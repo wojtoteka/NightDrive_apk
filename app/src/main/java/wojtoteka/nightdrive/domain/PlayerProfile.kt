@@ -87,6 +87,10 @@ class PlayerProfile {
     // Last nickname used for the online leaderboard (pre-fills the entry field)
     var playerName: String = ""
 
+    // Random id of this install, sent with scores so the server knows who owns a nickname.
+    // Survives "reset progress" (it isn't progress) and travels with backup/restore.
+    var playerId: String = ""
+
     fun ownsSkin(id: String): Boolean = ownedSkins.contains(id)
 
     fun copyFrom(other: PlayerProfile) {
@@ -131,5 +135,6 @@ class PlayerProfile {
         hapticsEnabled = other.hapticsEnabled
         language = other.language
         playerName = other.playerName
+        playerId = other.playerId
     }
 }
