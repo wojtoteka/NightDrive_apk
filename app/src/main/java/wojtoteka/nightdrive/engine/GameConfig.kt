@@ -72,8 +72,6 @@ object GameConfig {
     const val GLOBAL_TIME_STEP = 0.01f
     const val SPEED_MULT_MAX = 2.5f
 
-    // --- Revive (rewarded-ad continue) ---
-
     // --- Daily ---
     const val DAILY_REWARD = 25
     const val DAY_MS = 86_400_000L

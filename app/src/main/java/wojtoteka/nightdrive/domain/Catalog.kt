@@ -86,7 +86,7 @@ enum class PowerUpType(val id: String, val labelKey: String, val durationMs: Lon
     }
 }
 
-/** Price of one shield charge in the shop, either bought outright or claimed via a rewarded ad. */
+/** Price of one shield charge in the shop. */
 const val SHIELD_PRICE = 60
 
 /** One-time permanent purchase: raises the shield charge cap (see [PlayerProfile.shieldMax]). */
