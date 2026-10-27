@@ -259,6 +259,10 @@ class GameEngine(
         while (i < enemies.size) {
             val e = enemies[i]
             e.x -= (e.speed + globalTime / 55f) * factor
+            if (e.changingLane && e.x < halfWidth * C.LANE_CHANGE_TRIGGER) {
+                val step = C.LANE_CHANGE_SPEED * factor
+                e.y = if (e.targetY > e.y) min(e.targetY, e.y + step) else max(e.targetY, e.y - step)
+            }
             if (e.x <= despawnX) { enemies.removeAt(i); continue }
             if (enemyOverlaps(e, 0f, 0f)) {
                 if (profile.shieldCharges > 0) {
@@ -299,15 +303,16 @@ class GameEngine(
         val y = e.y + bounce
         val x = e.x
         val size = 10f - y / 9f
+        val len = e.length
         return when {
             y <= -20f ->
-                x - hb * 2.3f <= px + ph + padX && x + hb * 2.3f - size >= px - ph - padX &&
+                x - hb * 2.3f * len <= px + ph + padX && x + hb * 2.3f * len - size >= px - ph - padX &&
                     y + hb / 4f - 10f >= py - ph / 4f - 9f - padY && y - hb / 4f - 10f <= py + ph / 4f - 9f + padY
             y <= 10f ->
-                x - hb * 1.4f <= px + ph + padX && x + hb * 1.4f - size >= px - ph - padX &&
+                x - hb * 1.4f * len <= px + ph + padX && x + hb * 1.4f * len - size >= px - ph - padX &&
                     y + hb / 7f - 10f >= py - ph / 4f - 10f - padY && y - hb / 7f - 10f <= py + ph / 4f - 10f + padY
             else ->
-                x - hb <= px + ph + padX && x + hb - size >= px - ph - padX &&
+                x - hb * len <= px + ph + padX && x + hb * len - size >= px - ph - padX &&
                     y + hb / 12f - 8f >= py - ph / 5f - 8f - padY && y - hb / 12f - 8f <= py + ph / 5f - 8f + padY
         }
     }
@@ -331,11 +336,36 @@ class GameEngine(
         var speedMult = 1f + (score / 30) * 0.1f
         speedMult = min(speedMult, C.SPEED_MULT_MAX)
         val hue = rng.intInRange(0, 359)
-        enemies += Enemy(C.ENEMY_SPAWN_X, rng.intInRange(25f, -50f).toFloat(), speedMult, hue)
+        val y = rng.intInRange(25f, -50f).toFloat()
+        // Always draw the same number of values per spawn, whatever kind comes out, so the
+        // sequence of traffic stays reproducible from the seed.
+        val kind = pickEnemyKind(rng.next())
+        val shift = rng.nextFloat(C.LANE_CHANGE_MIN, C.LANE_CHANGE_MAX)
+        val up = rng.next() < 0.5f
+        enemies += when (kind) {
+            EnemyKind.CAR -> Enemy(C.ENEMY_SPAWN_X, y, speedMult, hue)
+            EnemyKind.TRUCK -> Enemy(C.ENEMY_SPAWN_X, y, speedMult * C.TRUCK_SPEED, hue, kind)
+            EnemyKind.SPEEDER -> Enemy(C.SPEEDER_SPAWN_X, y, speedMult * C.SPEEDER_SPEED, hue, kind)
+            EnemyKind.LANE_CHANGER -> {
+                var target = if (up) y + shift else y - shift
+                if (target > C.LANE_Y_MAX || target < C.LANE_Y_MIN) target = if (up) y - shift else y + shift
+                Enemy(C.ENEMY_SPAWN_X, y, speedMult, hue, kind, target.coerceIn(C.LANE_Y_MIN, C.LANE_Y_MAX))
+            }
+        }
         enemyTimer = clockMs
         val lo = 870f - ceil(globalTime * 2f) - difficulty * 10f
         val hi = 3900f - ceil(globalTime * 25f) - difficulty * 20f
         enemySpawnDelay = max(C.ENEMY_SPAWN_MIN_MS, rng.intInRange(lo, hi).toFloat())
+    }
+
+    /** Which kind of traffic a spawn becomes, given a uniform [roll] in [0, 1). */
+    private fun pickEnemyKind(roll: Float): EnemyKind {
+        val runSec = (clockMs - streakStartMs) / 1000f
+        var acc = 0f
+        if (runSec >= C.SPEEDER_UNLOCK_S) { acc += C.SPEEDER_CHANCE; if (roll < acc) return EnemyKind.SPEEDER }
+        if (runSec >= C.LANE_CHANGER_UNLOCK_S) { acc += C.LANE_CHANGER_CHANCE; if (roll < acc) return EnemyKind.LANE_CHANGER }
+        if (runSec >= C.TRUCK_UNLOCK_S) { acc += C.TRUCK_CHANCE; if (roll < acc) return EnemyKind.TRUCK }
+        return EnemyKind.CAR
     }
 
     // ---- Coins -----------------------------------------------------------------------------

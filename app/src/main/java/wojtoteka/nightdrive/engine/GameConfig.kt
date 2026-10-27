@@ -39,6 +39,25 @@ object GameConfig {
     const val MAX_ENEMIES = 8
     const val ENEMY_SPAWN_MIN_MS = 150f
 
+    // --- Traffic kinds (see EnemyKind). Unlock times are seconds into the run; chances are per
+    // spawn once unlocked. Speeders spawn further out so their edge marker gives time to react.
+    const val TRUCK_UNLOCK_S = 20f
+    const val TRUCK_CHANCE = 0.18f
+    const val TRUCK_SPEED = 0.7f
+    const val TRUCK_LENGTH = 1.8f
+    const val LANE_CHANGER_UNLOCK_S = 40f
+    const val LANE_CHANGER_CHANCE = 0.15f
+    const val LANE_CHANGE_TRIGGER = 0.55f        // starts drifting once x < halfWidth * this
+    const val LANE_CHANGE_SPEED = 0.35f          // units per tick
+    const val LANE_CHANGE_MIN = 18f
+    const val LANE_CHANGE_MAX = 26f
+    const val SPEEDER_UNLOCK_S = 60f
+    const val SPEEDER_CHANCE = 0.10f
+    const val SPEEDER_SPEED = 1.8f
+    const val SPEEDER_SPAWN_X = 800f
+    const val LANE_Y_MIN = -50f
+    const val LANE_Y_MAX = 25f
+
     // --- Coins ---
     const val COIN_SPAWN_X = 500f
     const val COIN_BASE_SPEED = 1f

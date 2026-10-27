@@ -6,6 +6,7 @@ import wojtoteka.nightdrive.domain.WorldTheme
 import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.engine.Coin
 import wojtoteka.nightdrive.engine.Enemy
+import wojtoteka.nightdrive.engine.EnemyKind
 import wojtoteka.nightdrive.engine.GameConfig
 import wojtoteka.nightdrive.engine.GameEngine
 import wojtoteka.nightdrive.engine.GamePhase
@@ -38,12 +39,13 @@ class WorldRenderer {
             for (i in engine.powerups.indices) depthOrder.add(engine.powerups[i])
             depthOrder.sortWith(depthComparator)
             for (i in depthOrder.indices) when (val obj = depthOrder[i]) {
-                is Enemy -> drawEnemy(rc, obj)
+                is Enemy -> drawEnemy(rc, obj, animMs)
                 is Coin -> drawCoin(rc, obj, animMs)
                 is PowerUp -> drawPowerUp(rc, obj, animMs)
             }
             drawPlayer(rc, engine, animMs)
             drawParticles(rc, engine)
+            drawSpeederWarnings(rc, engine, animMs)
         }
         rc.reset()
     }
@@ -199,13 +201,22 @@ class WorldRenderer {
         drawCar(rc, engine.player.x, engine.player.y, engine.player.bounce, skin.bodyColor, skin.accentColor)
     }
 
-    private fun drawEnemy(rc: RetroCanvas, e: Enemy) {
+    private fun drawEnemy(rc: RetroCanvas, e: Enemy, animMs: Float) {
         val col = RetroCanvas.hsl100(e.hue)
-        drawCar(rc, e.x, e.y, 0.3f * sin(e.x / 30f), col, col)
+        val bounce = 0.3f * sin(e.x / 30f)
+        if (e.kind == EnemyKind.SPEEDER) drawSpeedStreaks(rc, e, bounce, col)
+        drawCar(rc, e.x, e.y, bounce, col, col, e.length)
+        if (e.changingLane && (animMs / BLINK_MS).toInt() % 2 == 0) drawBlinker(rc, e, bounce)
     }
 
-    /** Faithful port of the original wireframe car (near face + far face + connecting edges). */
-    private fun drawCar(rc: RetroCanvas, baseX: Float, baseY: Float, bounce: Float, nearColor: Long, farColor: Long) {
+    /**
+     * Faithful port of the original wireframe car (near face + far face + connecting edges).
+     * [length] stretches the body for trucks; at 1 the geometry is exactly the original car.
+     */
+    private fun drawCar(
+        rc: RetroCanvas, baseX: Float, baseY: Float, bounce: Float,
+        nearColor: Long, farColor: Long, length: Float = 1f,
+    ) {
         rc.reset()
         rc.lineWidth = 1f
         val y = baseY + bounce
@@ -214,21 +225,82 @@ class WorldRenderer {
         val x = baseX
         val y2 = baseY / 1.1f + 5f - (baseY - 20f) / 10f + bounce
         val x2 = baseX / (1.07f - y2 / 700f)
+        val half1 = 2.5f * length * size1       // half body length, near face
+        val half2 = 2.5f * length * size2       // half body length, far face
+        val wheel1 = half1 - size1              // wheel centres sit one size in from each end
+        val wheel2 = half2 - size2
 
         // far wheels
-        rc.drawRound(x2 + 5f * size2 / 2f - 8f * size2 / 2f, y2 + 3f * size2 / 2f - 6f * size2 / 2f + bounce, 1.5f * size2, 1.5f * size2, farColor)
-        rc.drawRound(x2 + 5f * size2 / 2f - 2f * size2 / 2f, y2 + 3f * size2 / 2f - 6f * size2 / 2f + bounce, 1.5f * size2, 1.5f * size2, farColor)
+        rc.drawRound(x2 - wheel2, y2 + 3f * size2 / 2f - 6f * size2 / 2f + bounce, 1.5f * size2, 1.5f * size2, farColor)
+        rc.drawRound(x2 + wheel2, y2 + 3f * size2 / 2f - 6f * size2 / 2f + bounce, 1.5f * size2, 1.5f * size2, farColor)
         // near wheels
-        rc.drawRound(x + 5f * size1 / 2f - 8f * size1 / 2f, y + 3f * size1 / 2f - 6f * size1 / 2f + bounce, 1.5f * size1, 1.5f * size1, nearColor)
-        rc.drawRound(x + 5f * size1 / 2f - 2f * size1 / 2f, y + 3f * size1 / 2f - 6f * size1 / 2f + bounce, 1.5f * size1, 1.5f * size1, nearColor)
+        rc.drawRound(x - wheel1, y + 3f * size1 / 2f - 6f * size1 / 2f + bounce, 1.5f * size1, 1.5f * size1, nearColor)
+        rc.drawRound(x + wheel1, y + 3f * size1 / 2f - 6f * size1 / 2f + bounce, 1.5f * size1, 1.5f * size1, nearColor)
         // bodies
-        rc.drawRect(x, y, 5f * size1, 3f * size1, nearColor)
-        rc.drawRect(x2, y2, 5f * size2, 3f * size2, farColor)
+        rc.drawRect(x, y, 2f * half1, 3f * size1, nearColor)
+        rc.drawRect(x2, y2, 2f * half2, 3f * size2, farColor)
         // connecting edges
-        rc.drawLine(x + 5f * size1 / 2f, y + 3f * size1 / 2f, x2 + 5f * size2 / 2f, y2 + 3f * size2 / 2f, farColor)
-        rc.drawLine(x + 5f * size1 / 2f, y - 3f * size1 / 2f, x2 + 5f * size2 / 2f, y2 - 3f * size2 / 2f, farColor)
-        rc.drawLine(x - 5f * size1 / 2f, y + 3f * size1 / 2f, x2 - 5f * size2 / 2f, y2 + 3f * size2 / 2f, farColor)
-        rc.drawLine(x - 5f * size1 / 2f, y - 3f * size1 / 2f, x2 - 5f * size2 / 2f, y2 - 3f * size2 / 2f, farColor)
+        rc.drawLine(x + half1, y + 3f * size1 / 2f, x2 + half2, y2 + 3f * size2 / 2f, farColor)
+        rc.drawLine(x + half1, y - 3f * size1 / 2f, x2 + half2, y2 - 3f * size2 / 2f, farColor)
+        rc.drawLine(x - half1, y + 3f * size1 / 2f, x2 - half2, y2 + 3f * size2 / 2f, farColor)
+        rc.drawLine(x - half1, y - 3f * size1 / 2f, x2 - half2, y2 - 3f * size2 / 2f, farColor)
+        if (length > 1f) {
+            // Truck: the cab is split off the trailer at the front (traffic drives to the left).
+            val cab1 = x - half1 + 1.8f * size1
+            val cab2 = x2 - half2 + 1.8f * size2
+            rc.drawLine(cab1, y - 3f * size1 / 2f, cab1, y + 3f * size1 / 2f, nearColor)
+            rc.drawLine(cab2, y2 - 3f * size2 / 2f, cab2, y2 + 3f * size2 / 2f, farColor)
+        }
+    }
+
+    /** Amber indicator on the front corner facing the lane the car is about to move into. */
+    private fun drawBlinker(rc: RetroCanvas, e: Enemy, bounce: Float) {
+        val y = e.y + bounce
+        val size = 10f - y / 9f
+        val side = if (e.targetY > e.y) 1f else -1f
+        val bx = e.x - 2.5f * e.length * size
+        val by = y + side * 1.5f * size
+        rc.additive = true
+        rc.alpha = 0.45f
+        rc.fillRound(bx, by, 2.6f * size, 2.6f * size, BLINKER_COLOR)
+        rc.alpha = 1f
+        rc.fillRound(bx, by, 0.9f * size, 0.9f * size, BLINKER_COLOR)
+        rc.reset()
+    }
+
+    /** Motion lines trailing a speeder, so it reads as fast even while slow-mo is on. */
+    private fun drawSpeedStreaks(rc: RetroCanvas, e: Enemy, bounce: Float, color: Long) {
+        val y = e.y + bounce
+        val size = 10f - y / 9f
+        val tail = e.x + 2.5f * size
+        rc.reset()
+        rc.lineWidth = 0.6f
+        for (k in -1..1) {
+            val outer = if (k == 0) 0f else 1f
+            rc.alpha = 0.55f - 0.15f * outer
+            val ly = y + k * size
+            rc.drawLine(tail + size, ly, tail + (7f - 2f * outer) * size, ly, color)
+        }
+        rc.reset()
+    }
+
+    /** Flashing chevrons at the right edge, on the speeder's lane, while it is still off screen. */
+    private fun drawSpeederWarnings(rc: RetroCanvas, engine: GameEngine, animMs: Float) {
+        if ((animMs / BLINK_MS).toInt() % 2 != 0) return
+        val edge = rc.halfWidthUnits
+        for (i in engine.enemies.indices) {
+            val e = engine.enemies[i]
+            if (e.kind != EnemyKind.SPEEDER) continue
+            val size = 10f - e.y / 9f
+            if (e.x - 2.5f * size < edge) continue
+            val s = 0.55f * size
+            val tip = edge - 4f - 2.2f * s
+            rc.reset()
+            rc.lineWidth = 1.4f
+            rc.drawPolyline(false, tip + s, e.y + s, tip, e.y, tip + s, e.y - s, color = WARNING_COLOR)
+            rc.drawPolyline(false, tip + 2.2f * s, e.y + s, tip + 1.2f * s, e.y, tip + 2.2f * s, e.y - s, color = WARNING_COLOR)
+        }
+        rc.reset()
     }
 
     // ---- Coins & power-ups -----------------------------------------------------------------
@@ -297,5 +369,8 @@ class WorldRenderer {
         const val SUN_SLATS = 5
         const val TOKEN_ALPHA = 0.8f
         const val TOKEN_LINE = 0.8f
+        const val BLINK_MS = 180f
+        const val BLINKER_COLOR = 0xFFFFB020
+        const val WARNING_COLOR = 0xFFFF3D3D
     }
 }

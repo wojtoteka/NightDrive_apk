@@ -6,6 +6,7 @@ import org.junit.Test
 import wojtoteka.nightdrive.domain.PlayerProfile
 import wojtoteka.nightdrive.engine.Coin
 import wojtoteka.nightdrive.engine.Enemy
+import wojtoteka.nightdrive.engine.EnemyKind
 import wojtoteka.nightdrive.engine.GameConfig
 import wojtoteka.nightdrive.engine.GameEngine
 import wojtoteka.nightdrive.engine.GameEvent
@@ -97,6 +98,37 @@ class GameEngineTest {
         assertEquals(GamePhase.PLAYING, engine.phase)
         assertEquals(0, engine.nearMissesInRun)
         assertEquals(0, engine.score)
+    }
+
+    @Test
+    fun truckHitboxIsLongerThanACar() {
+        val car = startedEngine()
+        car.enemies.clear()
+        car.enemies += Enemy(car.player.x + 80f, car.player.y, 0f, 0)
+        car.update(0L)
+        assertEquals(GamePhase.PLAYING, car.phase)
+
+        val truck = startedEngine()
+        truck.enemies.clear()
+        truck.enemies += Enemy(truck.player.x + 80f, truck.player.y, 0f, 0, EnemyKind.TRUCK)
+        truck.update(0L)
+        assertEquals(GamePhase.GAME_OVER, truck.phase)
+    }
+
+    @Test
+    fun laneChangerDriftsToItsTargetLaneOnceOnScreen() {
+        val engine = startedEngine()
+        engine.enemies.clear()
+        // Far off screen it holds its lane...
+        val offScreen = Enemy(engine.halfWidth + 200f, 0f, 0f, 0, EnemyKind.LANE_CHANGER, targetY = 20f)
+        // ...on screen (and away from the player) it moves over.
+        val onScreen = Enemy(0f, 0f, 0f, 0, EnemyKind.LANE_CHANGER, targetY = 20f)
+        engine.enemies += offScreen
+        engine.enemies += onScreen
+        repeat(120) { engine.update(0L) }
+        assertEquals(0f, offScreen.y, 0f)
+        assertEquals(20f, onScreen.y, 0f)
+        assertTrue(!onScreen.changingLane)
     }
 
     @Test

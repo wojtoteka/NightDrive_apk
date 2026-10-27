@@ -12,12 +12,26 @@ class Player {
     var bounce = 0f
 }
 
+/**
+ * Traffic variety. Plain cars are the original enemy; the others unlock as a run goes on:
+ * trucks are long and slow, lane changers blink and drift into the next lane once on screen,
+ * speeders come in very fast but are announced by a flashing marker at the right edge.
+ */
+enum class EnemyKind { CAR, TRUCK, LANE_CHANGER, SPEEDER }
+
 class Enemy(
     var x: Float,
     var y: Float,
     var speed: Float,
     val hue: Int,
+    val kind: EnemyKind = EnemyKind.CAR,
+    /** Lane a [EnemyKind.LANE_CHANGER] drifts to; equals [y] for every other kind. */
+    var targetY: Float = y,
 ) {
+    /** Body length relative to a plain car; scales both the drawing and the hitbox. */
+    val length: Float get() = if (kind == EnemyKind.TRUCK) GameConfig.TRUCK_LENGTH else 1f
+    val changingLane: Boolean get() = kind == EnemyKind.LANE_CHANGER && y != targetY
+
     var collided = false
     /** Was inside the near-miss band around the player at some point (see GameConfig.NEAR_MISS_PAD_X). */
     var grazing = false
