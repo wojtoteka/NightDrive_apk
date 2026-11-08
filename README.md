@@ -47,7 +47,8 @@ deszcz monet) z trójstopniowymi ulepszeniami czasu trwania - osobno albo pakiet
 Do tego 26 osiągnięć z nagrodami w monetach.
 
 **Ranking online.** Top 10 wszech czasów, Top 10 trasy dnia i liga tygodniowa na własnym API,
-a gracz spoza dziesiątki widzi swoje miejsce. Zgłoszenie jest
+a gracz spoza dziesiątki widzi swoje miejsce. Z profilem (własny nick w grze) każdy lepszy wynik
+sam trafia do rankingów, a koniec biegu pokazuje zajmowane miejsce. Zgłoszenie jest
 podpisane HMAC-SHA256 razem z wersją gry, skrótem certyfikatu, którym podpisano APK, i losowym id
 instalacji (do niego przypisany jest nick, więc nikt nie nadpisze cudzego wpisu). Dochodzi do tego
 token Google Play Integrity, którego zmodowana wersja gry nie podrobi - serwer może dzięki temu

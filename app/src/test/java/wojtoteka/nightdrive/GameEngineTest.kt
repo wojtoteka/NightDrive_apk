@@ -415,6 +415,57 @@ class GameEngineTest {
     }
 
     @Test
+    fun aWeakerRunIsNeverSentForAProfile() {
+        val p = PlayerProfile().apply { changeProfileNick("Ala") }
+        assertTrue(!p.improvesBoards(0, null, 10L))
+        assertTrue(p.improvesBoards(50, null, 10L))
+        p.markSubmitted(50, null, 10L)
+        assertTrue(!p.improvesBoards(50, null, 10L))
+        assertTrue(!p.improvesBoards(49, null, 10L))
+        assertTrue(p.improvesBoards(51, null, 10L))
+    }
+
+    @Test
+    fun anAcceptedScoreNeverLowersWhatTheProfileHolds() {
+        val p = PlayerProfile().apply { changeProfileNick("Ala") }
+        p.markSubmitted(50, null, 10L)
+        p.markSubmitted(20, null, 10L)
+        assertEquals(50, p.submittedGlobal)
+        assertEquals(50, p.submittedWeekly)
+    }
+
+    @Test
+    fun aNewLeagueWeekStartsFromZeroButTheRecordStays() {
+        val p = PlayerProfile().apply { changeProfileNick("Ala") }
+        p.markSubmitted(50, null, 10L)
+        assertTrue("a new week has nothing on it yet", p.improvesBoards(5, null, 11L))
+        p.markSubmitted(5, null, 11L)
+        assertEquals(50, p.submittedGlobal)
+        assertEquals(5, p.submittedWeekly)
+        assertTrue(!p.improvesBoards(5, null, 11L))
+    }
+
+    @Test
+    fun theDailyBoardIsTrackedPerDay() {
+        val p = PlayerProfile().apply { changeProfileNick("Ala") }
+        p.markSubmitted(30, 500L, 10L)
+        assertEquals(0, p.submittedGlobal)
+        assertTrue(!p.improvesBoards(30, 500L, 10L))
+        assertTrue("tomorrow's route starts empty", p.improvesBoards(1, 501L, 10L))
+    }
+
+    @Test
+    fun aNewNicknameStartsWithNothingOnTheBoards() {
+        val p = PlayerProfile().apply { changeProfileNick("Ala") }
+        p.markSubmitted(50, null, 10L)
+        p.changeProfileNick("Ala")
+        assertEquals("same nickname keeps its scores", 50, p.submittedGlobal)
+        p.changeProfileNick("Ola")
+        assertEquals(0, p.submittedGlobal)
+        assertTrue(p.improvesBoards(1, null, 10L))
+    }
+
+    @Test
     fun everyCarBodyOutlineIsWellFormed() {
         for (body in CarBodies.all) {
             val outline = body.outline ?: continue

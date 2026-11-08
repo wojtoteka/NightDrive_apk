@@ -163,3 +163,14 @@ fun ShieldGlyph(color: Color, size: Dp = 22.dp, plus: Boolean = false) {
         }
     }
 }
+
+/** Head and shoulders: the player's profile. */
+@Composable
+fun PersonGlyph(color: Color = NDColors.Text, size: Dp = 16.dp) {
+    Canvas(Modifier.size(size)) {
+        val s = this.size.minDimension
+        val stroke = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round)
+        drawCircle(color, s * 0.22f, Offset(s / 2f, s * 0.26f), style = stroke)
+        drawArc(color, 180f, 180f, false, Offset(s * 0.1f, s * 0.6f), Size(s * 0.8f, s * 0.8f), style = stroke)
+    }
+}

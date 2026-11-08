@@ -105,11 +105,54 @@ class PlayerProfile {
     // Last nickname used for the online leaderboard (pre-fills the entry field)
     var playerName: String = ""
 
+    // The profile: once set, every improving run is sent to the rankings under this nickname.
+    var profileNick: String = ""
+
+    // The best this nickname has already had accepted on each board.
+    var submittedGlobal: Int = 0
+    var submittedDaily: Int = 0
+    var submittedDailyDay: Long = Long.MIN_VALUE
+    var submittedWeekly: Int = 0
+    var submittedWeeklyKey: Long = Long.MIN_VALUE
+
     // Random id of this install, sent with scores so the server knows who owns a nickname.
     // Survives "reset progress" (it isn't progress) and travels with backup/restore.
     var playerId: String = ""
 
     fun ownsSkin(id: String): Boolean = ownedSkins.contains(id)
+
+    /** A new nickname has nothing on the boards yet, so its first runs all count. */
+    fun changeProfileNick(nick: String) {
+        if (nick == profileNick) return
+        profileNick = nick
+        submittedGlobal = 0
+        submittedDaily = 0
+        submittedDailyDay = Long.MIN_VALUE
+        submittedWeekly = 0
+        submittedWeeklyKey = Long.MIN_VALUE
+    }
+
+    fun submittedDailyOn(day: Long): Int = if (submittedDailyDay == day) submittedDaily else 0
+    fun submittedWeeklyIn(week: Long): Int = if (submittedWeeklyKey == week) submittedWeekly else 0
+
+    /** Only a run that beats what this nickname already holds is worth sending. */
+    fun improvesBoards(score: Int, day: Long?, week: Long): Boolean = when {
+        score <= 0 -> false
+        day != null -> score > submittedDailyOn(day)
+        else -> score > submittedGlobal || score > submittedWeeklyIn(week)
+    }
+
+    /** Records an accepted score. Never lowers anything: boards keep a nickname's best. */
+    fun markSubmitted(score: Int, day: Long?, week: Long) {
+        if (day != null) {
+            submittedDaily = maxOf(score, submittedDailyOn(day))
+            submittedDailyDay = day
+        } else {
+            submittedGlobal = maxOf(score, submittedGlobal)
+            submittedWeekly = maxOf(score, submittedWeeklyIn(week))
+            submittedWeeklyKey = week
+        }
+    }
 
     companion object {
         const val TUTORIAL_NITRO = 3
@@ -170,6 +213,12 @@ class PlayerProfile {
         musicTrack = other.musicTrack
         language = other.language
         playerName = other.playerName
+        profileNick = other.profileNick
+        submittedGlobal = other.submittedGlobal
+        submittedDaily = other.submittedDaily
+        submittedDailyDay = other.submittedDailyDay
+        submittedWeekly = other.submittedWeekly
+        submittedWeeklyKey = other.submittedWeeklyKey
         playerId = other.playerId
     }
 }

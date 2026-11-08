@@ -8,7 +8,7 @@ import wojtoteka.nightdrive.engine.EnemyKind
 import wojtoteka.nightdrive.engine.GamePhase
 
 /** Top-level screen the player is looking at. The animated world is drawn behind all of them. */
-enum class Destination { MENU, GAME, SHOP, ACHIEVEMENTS, SETTINGS, LEADERBOARD }
+enum class Destination { MENU, GAME, SHOP, ACHIEVEMENTS, SETTINGS, LEADERBOARD, PROFILE }
 
 /** One of the four on-screen d-pad directions. */
 enum class PadDir { LEFT, RIGHT, UP, DOWN }
@@ -17,6 +17,7 @@ enum class PadDir { LEFT, RIGHT, UP, DOWN }
 @Immutable
 data class ProfileSnapshot(
     val highScore: Int = 0,
+    val profileNick: String = "",
     val totalCoins: Int = 0,
     val lifetimeCoins: Int = 0,
     val bestTimeSec: Int = 0,

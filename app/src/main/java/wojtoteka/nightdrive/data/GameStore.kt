@@ -98,6 +98,12 @@ class GameStore(private val context: Context) {
             musicTrack = prefs[K.musicTrack] ?: 0
             language = prefs[K.language] ?: "system"
             playerName = prefs[K.playerName] ?: ""
+            profileNick = prefs[K.profileNick] ?: ""
+            submittedGlobal = prefs[K.submittedGlobal] ?: 0
+            submittedDaily = prefs[K.submittedDaily] ?: 0
+            submittedDailyDay = prefs[K.submittedDailyDay] ?: Long.MIN_VALUE
+            submittedWeekly = prefs[K.submittedWeekly] ?: 0
+            submittedWeeklyKey = prefs[K.submittedWeeklyKey] ?: Long.MIN_VALUE
             playerId = prefs[K.playerId] ?: ""
             // Keep the owned sets consistent with the free defaults.
             if (!ownedSkins.contains(Skins.DEFAULT_ID)) ownedSkins.add(Skins.DEFAULT_ID)
@@ -165,6 +171,12 @@ class GameStore(private val context: Context) {
             e[K.musicTrack] = p.musicTrack
             e[K.language] = p.language
             e[K.playerName] = p.playerName
+            e[K.profileNick] = p.profileNick
+            e[K.submittedGlobal] = p.submittedGlobal
+            e[K.submittedDaily] = p.submittedDaily
+            e[K.submittedDailyDay] = p.submittedDailyDay
+            e[K.submittedWeekly] = p.submittedWeekly
+            e[K.submittedWeeklyKey] = p.submittedWeeklyKey
             if (p.playerId.isNotEmpty()) e[K.playerId] = p.playerId
         }
     }
@@ -289,6 +301,12 @@ class GameStore(private val context: Context) {
         val musicTrack = intPreferencesKey("music_track")
         val language = stringPreferencesKey("language")
         val playerName = stringPreferencesKey("player_name")
+        val profileNick = stringPreferencesKey("profile_nick")
+        val submittedGlobal = intPreferencesKey("submitted_global")
+        val submittedDaily = intPreferencesKey("submitted_daily")
+        val submittedDailyDay = longPreferencesKey("submitted_daily_day")
+        val submittedWeekly = intPreferencesKey("submitted_weekly")
+        val submittedWeeklyKey = longPreferencesKey("submitted_weekly_key")
         val playerId = stringPreferencesKey("player_id")
     }
 }

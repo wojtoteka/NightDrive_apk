@@ -10,10 +10,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -35,9 +32,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -55,17 +49,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.Strings
 import wojtoteka.nightdrive.engine.GamePhase
+import wojtoteka.nightdrive.net.PlayerRank
 import wojtoteka.nightdrive.net.SubmitState
 import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
@@ -74,6 +68,7 @@ import wojtoteka.nightdrive.ui.HudPowerUp
 import wojtoteka.nightdrive.ui.PadDir
 import wojtoteka.nightdrive.ui.components.Bar
 import wojtoteka.nightdrive.ui.components.CoinIcon
+import wojtoteka.nightdrive.ui.components.NickField
 import wojtoteka.nightdrive.ui.components.Overline
 import wojtoteka.nightdrive.ui.components.Panel
 import wojtoteka.nightdrive.ui.components.PauseGlyph
@@ -530,6 +525,8 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
     val s = LocalStrings.current
     val line: Pair<String, Color>? = when (val st = vm.submitState) {
         is SubmitState.Done -> "${s[if (st.league) "saved_rank_league" else "saved_rank"]} #${st.rank ?: "?"}" to NDColors.Positive
+        is SubmitState.Standing -> standingLine(s, st) to if (st.improved) NDColors.Positive else NDColors.TextDim
+        SubmitState.ProfileNickTaken -> s["profile_nick_taken"] to NDColors.Danger
         SubmitState.Submitting -> s["submitting"] to NDColors.TextDim
         SubmitState.Failed -> s["submit_failed"] to NDColors.Danger
         SubmitState.Offline -> s["submit_offline"] to NDColors.TextFaint
@@ -569,33 +566,22 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
             )
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .heightIn(min = 44.dp)
-                        .clip(Corner.control)
-                        .background(NDColors.Inset)
-                        .border(BorderStroke(1.dp, NDColors.LineStrong), Corner.control)
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (name.isEmpty()) Text(s["enter_name"], style = NDType.Label, color = NDColors.TextFaint)
-                    BasicTextField(
-                        value = name,
-                        onValueChange = { input -> name = input.filter { it.isLetterOrDigit() || it in " _.-" }.take(16) },
-                        singleLine = true,
-                        textStyle = NDType.Label.copy(color = NDColors.Text),
-                        cursorBrush = SolidColor(NDColors.Accent),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { submit() }),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                NickField(name, { name = it }, { submit() }, Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 PrimaryButton(s["submit_score"], { submit() }, enabled = name.trim().isNotEmpty())
             }
         }
     }
+}
+
+/** "Saved · Leaderboard #57 · League #12": where the player's profile stands after a run. */
+private fun standingLine(s: Strings, st: SubmitState.Standing): String {
+    fun place(r: PlayerRank) = "#${r.rank}${if (r.capped) "+" else ""}"
+    val places = listOfNotNull(
+        st.rank?.let { "${s[if (st.daily) "board_daily" else "leaderboard"]} ${place(it)}" },
+        st.league?.let { "${s["board_weekly"]} ${place(it)}" },
+    )
+    return (listOf(s[if (st.improved) "auto_saved" else "auto_standing"]) + places).joinToString(" · ")
 }
 
 private fun fmtMult(m: Float): String = if (m == m.toInt().toFloat()) m.toInt().toString() else m.toString()

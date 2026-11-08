@@ -41,7 +41,19 @@ data class SubmitResult(
     val qualified: Boolean,
     val error: String? = null,
     val weeklyRank: Int? = null,
+    val capped: Boolean = false,
 )
+
+/** Answer to reserving a nickname for the profile. */
+sealed interface ClaimResult {
+    /** [name] is the nickname as the server stored it. */
+    data class Ok(val name: String) : ClaimResult
+    data object Taken : ClaimResult
+    data object Invalid : ClaimResult
+    data object Unverified : ClaimResult
+    data object UpdateRequired : ClaimResult
+    data object Failed : ClaimResult
+}
 
 /** State of a score submission, for the game-over UI. */
 sealed interface SubmitState {
@@ -57,6 +69,10 @@ sealed interface SubmitState {
     data object Unverified : SubmitState
     /** The server no longer accepts scores from this version. */
     data object UpdateRequired : SubmitState
+    /** Where a profile's run left it. [improved]: this run was sent and accepted. */
+    data class Standing(val improved: Boolean, val daily: Boolean, val rank: PlayerRank?, val league: PlayerRank?) : SubmitState
+    /** The profile's nickname was refused as somebody else's. */
+    data object ProfileNickTaken : SubmitState
 }
 
 /**
@@ -98,6 +114,47 @@ class LeaderboardApi(
 
     /** Top 10 of the daily route of UTC day [day] (the same day number the game seeds it with). */
     suspend fun fetchDaily(day: Long): List<LeaderboardEntry> = fetchEntries("$baseUrl/api/v2/daily?day=$day")
+
+    /** Reserves [name] for this install's profile, behind the same checks as a score. */
+    suspend fun claimNick(name: String, playerId: String): ClaimResult {
+        val clientTime = System.currentTimeMillis()
+        val nonce = randomNonce()
+        val appVersion = BuildConfig.VERSION_CODE
+        // Must match profileMessage on the server, field for field.
+        val message = listOf("v2profile", name, clientTime, nonce, appVersion, certDigest, playerId).joinToString("|")
+        val integrityToken = integrity.request(integrityNonce(message))
+        return withContext(Dispatchers.IO) {
+            try {
+                val payload = JSONObject()
+                    .put("name", name)
+                    .put("clientTime", clientTime)
+                    .put("nonce", nonce)
+                    .put("appVersion", appVersion)
+                    .put("certDigest", certDigest)
+                    .put("playerId", playerId)
+                    .put("signature", hmac(message))
+                if (integrityToken != null) payload.put("integrityToken", integrityToken)
+                val req = Request.Builder()
+                    .url("$baseUrl/api/v2/profile")
+                    .header("x-api-key", apiKey)
+                    .post(payload.toString().toRequestBody(json))
+                    .build()
+                client.newCall(req).execute().use { resp ->
+                    val o = try { JSONObject(resp.body?.string().orEmpty()) } catch (_: Exception) { JSONObject() }
+                    when {
+                        resp.isSuccessful -> ClaimResult.Ok(o.optString("name", name))
+                        o.optString("error") == "name_taken" -> ClaimResult.Taken
+                        o.optString("error") == "invalid" -> ClaimResult.Invalid
+                        o.optString("error") == "untrusted_app" -> ClaimResult.Unverified
+                        o.optString("error") == "update_required" -> ClaimResult.UpdateRequired
+                        else -> ClaimResult.Failed
+                    }
+                }
+            } catch (_: Exception) {
+                ClaimResult.Failed
+            }
+        }
+    }
 
     /** Top 10 of league week [week]. */
     suspend fun fetchWeekly(week: Long): List<LeaderboardEntry> = fetchEntries("$baseUrl/api/v2/weekly?week=$week")
@@ -196,6 +253,7 @@ class LeaderboardApi(
                     rank = if (o.has("rank")) o.getInt("rank") else null,
                     qualified = o.optBoolean("qualified", false),
                     weeklyRank = if (o.has("weeklyRank")) o.getInt("weeklyRank") else null,
+                    capped = o.optBoolean("capped", false),
                 )
             }
         }

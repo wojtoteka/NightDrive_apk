@@ -33,6 +33,7 @@ import wojtoteka.nightdrive.engine.RunMode
 import wojtoteka.nightdrive.engine.WaveKind
 import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.net.Board
+import wojtoteka.nightdrive.net.ClaimResult
 import wojtoteka.nightdrive.net.LeaderboardEntry
 import wojtoteka.nightdrive.net.LeaderboardState
 import wojtoteka.nightdrive.net.PlayerRank
@@ -68,6 +69,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var scoreQualifies by mutableStateOf(false); private set
     /** The run made this week's league but not the all-time Top 10. */
     var qualifiesLeagueOnly by mutableStateOf(false); private set
+    /** Answer to the last attempt at saving the profile; null while there is nothing to say. */
+    var claimResult by mutableStateOf<ClaimResult?>(null); private set
+    var claimInProgress by mutableStateOf(false); private set
+    /** The profile's places on the all-time board and in this week's league. */
+    var profileRanks by mutableStateOf<Pair<PlayerRank?, PlayerRank?>>(null to null); private set
     /** Where the player's best would stand on the open board; null until known. */
     var myRank by mutableStateOf<PlayerRank?>(null); private set
     var submitState by mutableStateOf<SubmitState>(SubmitState.Idle); private set
@@ -278,7 +284,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                     haptics.heavy()
                     onGameOver()
                     // A daily route run competes on that day's board, not the all-time one.
-                    evaluateQualification(engine.score, if (engine.mode == RunMode.DAILY) engine.runDay else null)
+                    val day = if (engine.mode == RunMode.DAILY) engine.runDay else null
+                    if (profile.profileNick.isNotEmpty() && !showcase) autoSubmit(engine.score, day)
+                    else evaluateQualification(engine.score, day)
                 }
                 is GameEvent.AchievementUnlocked -> {
                     audio.play(Sfx.COIN, 0.6f)
@@ -573,6 +581,96 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * The profile's end of a run: a run that improves on what the nickname already holds goes to
+     * the boards by itself, anything else is never sent and only reports where the player stands.
+     */
+    private fun autoSubmit(finalScore: Int, dailyDay: Long?) {
+        gameOverScore = finalScore
+        gameOverDay = dailyDay
+        scoreQualifies = false
+        qualifiesLeagueOnly = false
+        val token = runToken
+        val week = thisWeek()
+        if (!profile.improvesBoards(finalScore, dailyDay, week)) {
+            showStanding(dailyDay, token)
+            return
+        }
+        val nick = profile.profileNick
+        submitState = SubmitState.Submitting
+        viewModelScope.launch {
+            val sid = sessionId ?: leaderboardApi.startSession().also { if (token == runToken) sessionId = it }
+            if (sid == null) { if (token == runToken) submitState = SubmitState.Offline; return@launch }
+            val result = try {
+                val r = leaderboardApi.submit(sid, nick, finalScore, profile.playerId, dailyDay)
+                when {
+                    r.accepted -> {
+                        profile.markSubmitted(finalScore, dailyDay, week)
+                        persist()
+                        if (token == runToken) sessionId = null
+                        SubmitState.Standing(
+                            improved = true,
+                            daily = dailyDay != null,
+                            rank = r.rank?.let { PlayerRank(it, r.capped) },
+                            league = r.weeklyRank?.let { PlayerRank(it, false) },
+                        )
+                    }
+                    r.error == "name_taken" -> SubmitState.ProfileNickTaken
+                    r.error == "untrusted_app" -> SubmitState.Unverified
+                    r.error == "update_required" -> SubmitState.UpdateRequired
+                    else -> SubmitState.Failed
+                }
+            } catch (_: Exception) {
+                SubmitState.Offline
+            }
+            if (token == runToken) submitState = result
+        }
+    }
+
+    private fun showStanding(dailyDay: Long?, token: Int) {
+        viewModelScope.launch {
+            val rank = if (dailyDay != null) rankOf(Board.DAILY, profile.submittedDailyOn(dailyDay), dailyDay)
+            else rankOf(Board.GLOBAL, profile.submittedGlobal, null)
+            val league = if (dailyDay != null) null else rankOf(Board.WEEKLY, profile.submittedWeeklyIn(thisWeek()), thisWeek())
+            if (token == runToken && (rank != null || league != null)) {
+                submitState = SubmitState.Standing(false, dailyDay != null, rank, league)
+            }
+        }
+    }
+
+    private suspend fun rankOf(board: Board, best: Int, period: Long?): PlayerRank? =
+        if (best > 0) leaderboardApi.fetchRank(board, best, period) else null
+
+    // ---- Profile ---------------------------------------------------------------------------
+
+    fun saveProfile(name: String) {
+        val trimmed = name.trim().replace(Regex("\\s+"), " ")
+        if (trimmed.isEmpty() || claimInProgress) return
+        claimInProgress = true
+        claimResult = null
+        viewModelScope.launch {
+            val result = leaderboardApi.claimNick(trimmed, profile.playerId)
+            if (result is ClaimResult.Ok) {
+                profile.changeProfileNick(result.name)
+                profile.playerName = result.name
+                persist()
+                refreshProfileState()
+                refreshProfileRanks()
+            }
+            claimResult = result
+            claimInProgress = false
+        }
+    }
+
+    fun clearClaimResult() { claimResult = null }
+
+    fun refreshProfileRanks() {
+        viewModelScope.launch {
+            profileRanks = rankOf(Board.GLOBAL, profile.submittedGlobal, null) to
+                rankOf(Board.WEEKLY, profile.submittedWeeklyIn(thisWeek()), thisWeek())
+        }
+    }
+
     fun submitNickname(name: String) {
         // Same whitespace rule as the server, so the stored name is exactly what was typed.
         val trimmed = name.trim().replace(Regex("\\s+"), " ")
@@ -581,16 +679,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         persist()
         submitState = SubmitState.Submitting
         val token = runToken
+        val score = gameOverScore
+        val day = gameOverDay
+        val week = thisWeek()
         viewModelScope.launch {
             // Last-chance session: if the run-start handshake failed, try once more now.
-            val sid = sessionId ?: leaderboardApi.startSession().also { sessionId = it }
+            val sid = sessionId ?: leaderboardApi.startSession().also { if (token == runToken) sessionId = it }
             if (sid == null) { if (token == runToken) submitState = SubmitState.Offline; return@launch }
             val result = try {
-                val r = leaderboardApi.submit(sid, trimmed, gameOverScore, profile.playerId, gameOverDay)
+                val r = leaderboardApi.submit(sid, trimmed, score, profile.playerId, day)
                 when {
                     r.accepted -> {
-                        sessionId = null
                         val leagueOnly = qualifiesLeagueOnly && r.weeklyRank != null
+                        if (token == runToken) sessionId = null
+                        if (profile.profileNick == trimmed) { profile.markSubmitted(score, day, week); persist() }
                         scoreQualifies = false
                         fetchLeaderboard()
                         SubmitState.Done(if (leagueOnly) r.weeklyRank else r.rank, leagueOnly)
@@ -879,6 +981,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private fun refreshProfileState() {
         profileState = ProfileSnapshot(
             highScore = profile.highScore,
+            profileNick = profile.profileNick,
             totalCoins = profile.totalCoins,
             lifetimeCoins = profile.lifetimeCoins,
             bestTimeSec = profile.longestStreakTimeSec,
