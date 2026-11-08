@@ -74,7 +74,7 @@ fun LeaderboardScreen(vm: GameViewModel) {
 
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when (val st = vm.leaderboardState) {
-                is LeaderboardState.Loading -> Overline(s["submitting"], color = NDColors.TextDim)
+                is LeaderboardState.Loading -> Overline(s["loading"], color = NDColors.TextDim)
                 is LeaderboardState.Offline -> StateMessage(s["leaderboard_offline"]) {
                     SecondaryButton(s["retry"], { vm.fetchLeaderboard() })
                 }

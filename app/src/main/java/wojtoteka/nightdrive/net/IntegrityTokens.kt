@@ -28,6 +28,8 @@ class IntegrityTokens(context: Context) {
      * wasn't installed from Play, offline...). The server decides what a missing token means.
      */
     suspend fun request(nonce: String): String? {
+        // Play never vouches for a debug build, so don't keep the player waiting for its answer.
+        if (BuildConfig.DEBUG) return null
         val m = manager ?: return null
         return withTimeoutOrNull(TIMEOUT_MS) {
             suspendCancellableCoroutine { cont ->

@@ -580,11 +580,12 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         profile.playerName = trimmed
         persist()
         submitState = SubmitState.Submitting
+        val token = runToken
         viewModelScope.launch {
             // Last-chance session: if the run-start handshake failed, try once more now.
             val sid = sessionId ?: leaderboardApi.startSession().also { sessionId = it }
-            if (sid == null) { submitState = SubmitState.Offline; return@launch }
-            submitState = try {
+            if (sid == null) { if (token == runToken) submitState = SubmitState.Offline; return@launch }
+            val result = try {
                 val r = leaderboardApi.submit(sid, trimmed, gameOverScore, profile.playerId, gameOverDay)
                 when {
                     r.accepted -> {
@@ -603,6 +604,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 SubmitState.Offline
             }
+            // The player may have started the next run meanwhile; this answer is not about that one.
+            if (token == runToken) submitState = result
         }
     }
 

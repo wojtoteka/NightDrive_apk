@@ -464,8 +464,12 @@ class WorldRenderer {
         val size = 10f - p.y / 9f
         val rear = p.x - 2.5f * size
         val flicker = 0.75f + 0.25f * sin(animMs / 30f)
+        val y = p.y - 0.5f * size
+        val h = 0.75f * size
+        val tip = rear - 5f * size * flicker
         rc.alpha = 0.85f
-        rc.fillRound(rear - 2f * size * flicker, p.y - 0.4f * size, 4.4f * size * flicker, 1.4f * size, NITRO_FLAME)
+        rc.fillPolygon(rear, y + h, rear, y - h, tip, y, color = NITRO_FLAME)
+        rc.fillPolygon(rear, y + 0.45f * h, rear, y - 0.45f * h, rear - (rear - tip) * 0.55f, y, color = NITRO_CORE)
         rc.reset()
     }
 
@@ -627,6 +631,7 @@ class WorldRenderer {
         const val POLICE_BLUE = 0xFF4F8CFF
         const val POLICE_BLINK_MS = 120f
         const val NITRO_FLAME = 0xFFFFB020
+        const val NITRO_CORE = 0xFFFFF0B0
         const val TRAIL_POINTS = 22
         const val TRAIL_STEP_MS = 16f
         const val TRAIL_SHIFT = 2.4f
