@@ -67,12 +67,24 @@ fun SettingsScreen(vm: GameViewModel) {
                 Column {
                     SettingRow(s["music"], null) { Toggle(p.musicEnabled) { vm.setMusicEnabled(it) } }
                     Rule()
+                    SettingRow(s["music_track"], null) {
+                        SegmentedControl(
+                            options = listOf(s["track_night"], s["track_neon"]),
+                            selectedIndex = p.musicTrack,
+                            onSelect = { vm.setMusicTrack(it) },
+                        )
+                    }
+                    Rule()
                     SettingRow(s["sound_effects"], null) { Toggle(p.sfxEnabled) { vm.setSfxEnabled(it) } }
                     Rule()
                     SettingRow(s["haptics"], null) { Toggle(p.hapticsEnabled) { vm.setHapticsEnabled(it) } }
                     Rule()
                     SettingRow(s["scenery_rotation"], s["scenery_rotation_d"]) {
                         Toggle(p.sceneryRotation) { vm.setSceneryRotation(it) }
+                    }
+                    Rule()
+                    SettingRow(s["joystick_right"], s["joystick_right_d"]) {
+                        Toggle(p.joystickRight) { vm.setJoystickRight(it) }
                     }
                     Rule()
                     SettingRow(s["language"], null) {

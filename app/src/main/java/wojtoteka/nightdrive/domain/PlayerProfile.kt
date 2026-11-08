@@ -22,6 +22,7 @@ class PlayerProfile {
     var lifetimeBoostsUsed: Int = 0
     var lifetimePowerups: Int = 0
     var lifetimeNearMisses: Int = 0
+    var lifetimeSmashes: Int = 0
 
     // Starter boosts bought in the shop: stock of one-shot activations consumed at the start
     // of the next run (one of each kind per run), on top of the normal in-run random spawns.
@@ -59,6 +60,10 @@ class PlayerProfile {
     var selectedSkin: String = Skins.DEFAULT_ID
     var ownedThemes: MutableSet<String> = mutableSetOf(WorldThemes.DEFAULT_ID)
     var selectedTheme: String = WorldThemes.DEFAULT_ID
+    var ownedBodies: MutableSet<String> = mutableSetOf(CarBodies.DEFAULT_ID)
+    var selectedBody: String = CarBodies.DEFAULT_ID
+    var ownedTrails: MutableSet<String> = mutableSetOf(Trails.DEFAULT_ID)
+    var selectedTrail: String = Trails.DEFAULT_ID
 
     // Achievements (ids of unlocked ones)
     var unlockedAchievements: MutableSet<String> = mutableSetOf()
@@ -77,21 +82,82 @@ class PlayerProfile {
     var dailyRunAttempts: Int = 0
     var lifetimeDailyRuns: Int = 0
 
+    // Today's best daily-route run as (x, y) fixed-point samples, replayed as a ghost car.
+    var ghostDayKey: Long = Long.MIN_VALUE
+    var ghostTrack: ShortArray = ShortArray(0)
+
+    // This week's best normal run (the league position is worked out from it).
+    var weeklyKey: Long = Long.MIN_VALUE
+    var weeklyBest: Int = 0
+
+    // First-run hints: 0 steer, 1 coins, 2 near misses, 3 nitro, [TUTORIAL_DONE] finished.
+    var tutorialStep: Int = 0
+
     // Settings
     var sceneryRotation: Boolean = true   // cycle owned world themes stage by stage during a run
     var musicEnabled: Boolean = true
     var sfxEnabled: Boolean = true
     var hapticsEnabled: Boolean = true
+    var joystickRight: Boolean = false    // left-handed layout: joystick right, nitro left
+    var musicTrack: Int = 0
     var language: String = Language.SYSTEM.code
 
     // Last nickname used for the online leaderboard (pre-fills the entry field)
     var playerName: String = ""
+
+    // The profile: once set, every improving run is sent to the rankings under this nickname.
+    var profileNick: String = ""
+
+    // The best this nickname has already had accepted on each board.
+    var submittedGlobal: Int = 0
+    var submittedDaily: Int = 0
+    var submittedDailyDay: Long = Long.MIN_VALUE
+    var submittedWeekly: Int = 0
+    var submittedWeeklyKey: Long = Long.MIN_VALUE
 
     // Random id of this install, sent with scores so the server knows who owns a nickname.
     // Survives "reset progress" (it isn't progress) and travels with backup/restore.
     var playerId: String = ""
 
     fun ownsSkin(id: String): Boolean = ownedSkins.contains(id)
+
+    /** A new nickname has nothing on the boards yet, so its first runs all count. */
+    fun changeProfileNick(nick: String) {
+        if (nick == profileNick) return
+        profileNick = nick
+        submittedGlobal = 0
+        submittedDaily = 0
+        submittedDailyDay = Long.MIN_VALUE
+        submittedWeekly = 0
+        submittedWeeklyKey = Long.MIN_VALUE
+    }
+
+    fun submittedDailyOn(day: Long): Int = if (submittedDailyDay == day) submittedDaily else 0
+    fun submittedWeeklyIn(week: Long): Int = if (submittedWeeklyKey == week) submittedWeekly else 0
+
+    /** Only a run that beats what this nickname already holds is worth sending. */
+    fun improvesBoards(score: Int, day: Long?, week: Long): Boolean = when {
+        score <= 0 -> false
+        day != null -> score > submittedDailyOn(day)
+        else -> score > submittedGlobal || score > submittedWeeklyIn(week)
+    }
+
+    /** Records an accepted score. Never lowers anything: boards keep a nickname's best. */
+    fun markSubmitted(score: Int, day: Long?, week: Long) {
+        if (day != null) {
+            submittedDaily = maxOf(score, submittedDailyOn(day))
+            submittedDailyDay = day
+        } else {
+            submittedGlobal = maxOf(score, submittedGlobal)
+            submittedWeekly = maxOf(score, submittedWeeklyIn(week))
+            submittedWeeklyKey = week
+        }
+    }
+
+    companion object {
+        const val TUTORIAL_NITRO = 3
+        const val TUTORIAL_DONE = 4
+    }
 
     fun copyFrom(other: PlayerProfile) {
         highScore = other.highScore
@@ -114,10 +180,15 @@ class PlayerProfile {
         lifetimeBoostsUsed = other.lifetimeBoostsUsed
         lifetimePowerups = other.lifetimePowerups
         lifetimeNearMisses = other.lifetimeNearMisses
+        lifetimeSmashes = other.lifetimeSmashes
         ownedSkins = other.ownedSkins.toMutableSet()
         selectedSkin = other.selectedSkin
         ownedThemes = other.ownedThemes.toMutableSet()
         selectedTheme = other.selectedTheme
+        ownedBodies = other.ownedBodies.toMutableSet()
+        selectedBody = other.selectedBody
+        ownedTrails = other.ownedTrails.toMutableSet()
+        selectedTrail = other.selectedTrail
         unlockedAchievements = other.unlockedAchievements.toMutableSet()
         dailyDayKey = other.dailyDayKey
         dailyStreak = other.dailyStreak
@@ -129,12 +200,25 @@ class PlayerProfile {
         dailyRunBest = other.dailyRunBest
         dailyRunAttempts = other.dailyRunAttempts
         lifetimeDailyRuns = other.lifetimeDailyRuns
+        ghostDayKey = other.ghostDayKey
+        ghostTrack = other.ghostTrack
+        weeklyKey = other.weeklyKey
+        weeklyBest = other.weeklyBest
+        tutorialStep = other.tutorialStep
         sceneryRotation = other.sceneryRotation
         musicEnabled = other.musicEnabled
         sfxEnabled = other.sfxEnabled
         hapticsEnabled = other.hapticsEnabled
+        joystickRight = other.joystickRight
+        musicTrack = other.musicTrack
         language = other.language
         playerName = other.playerName
+        profileNick = other.profileNick
+        submittedGlobal = other.submittedGlobal
+        submittedDaily = other.submittedDaily
+        submittedDailyDay = other.submittedDailyDay
+        submittedWeekly = other.submittedWeekly
+        submittedWeeklyKey = other.submittedWeeklyKey
         playerId = other.playerId
     }
 }

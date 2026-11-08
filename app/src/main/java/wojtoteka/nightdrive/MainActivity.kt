@@ -149,6 +149,11 @@ class MainActivity : ComponentActivity() {
                     KeyEvent(event.downTime, event.eventTime, event.action, KeyEvent.KEYCODE_DPAD_CENTER, event.repeatCount)
                 )
             }
+            // Space / gamepad X or right bumper = nitro.
+            KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_R1 -> if (playing) {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) viewModel.activateNitro()
+                return true
+            }
             // Gamepad B = back (Compose BackHandlers route it per screen).
             KeyEvent.KEYCODE_BUTTON_B -> {
                 if (event.action == KeyEvent.ACTION_UP) onBackPressedDispatcher.onBackPressed()

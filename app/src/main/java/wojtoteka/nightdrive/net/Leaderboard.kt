@@ -20,8 +20,11 @@ import javax.crypto.spec.SecretKeySpec
 /** One row of the Top 10. */
 data class LeaderboardEntry(val rank: Int, val name: String, val score: Int)
 
-/** Which ranking: the all-time Top 10 or today's daily route. */
-enum class Board { GLOBAL, DAILY }
+/** Which ranking: the all-time Top 10, today's daily route or this week's league. */
+enum class Board(val id: String) { GLOBAL("global"), DAILY("daily"), WEEKLY("weekly") }
+
+/** Where a score stands on a board; [capped] means below the rows the server keeps. */
+data class PlayerRank(val rank: Int, val capped: Boolean)
 
 /** UI state for the leaderboard screen. */
 sealed interface LeaderboardState {
@@ -32,13 +35,32 @@ sealed interface LeaderboardState {
 }
 
 /** Result of submitting a score; [error] is the server's error code when it was refused. */
-data class SubmitResult(val accepted: Boolean, val rank: Int?, val qualified: Boolean, val error: String? = null)
+data class SubmitResult(
+    val accepted: Boolean,
+    val rank: Int?,
+    val qualified: Boolean,
+    val error: String? = null,
+    val weeklyRank: Int? = null,
+    val capped: Boolean = false,
+)
+
+/** Answer to reserving a nickname for the profile. */
+sealed interface ClaimResult {
+    /** [name] is the nickname as the server stored it. */
+    data class Ok(val name: String) : ClaimResult
+    data object Taken : ClaimResult
+    data object Invalid : ClaimResult
+    data object Unverified : ClaimResult
+    data object UpdateRequired : ClaimResult
+    data object Failed : ClaimResult
+}
 
 /** State of a score submission, for the game-over UI. */
 sealed interface SubmitState {
     data object Idle : SubmitState
     data object Submitting : SubmitState
-    data class Done(val rank: Int?) : SubmitState
+    /** [league]: [rank] is the place in this week's league rather than the all-time board. */
+    data class Done(val rank: Int?, val league: Boolean = false) : SubmitState
     data object Failed : SubmitState
     data object Offline : SubmitState
     /** Someone else owns that nickname - the entry field stays open for another one. */
@@ -47,6 +69,10 @@ sealed interface SubmitState {
     data object Unverified : SubmitState
     /** The server no longer accepts scores from this version. */
     data object UpdateRequired : SubmitState
+    /** Where a profile's run left it. [improved]: this run was sent and accepted. */
+    data class Standing(val improved: Boolean, val daily: Boolean, val rank: PlayerRank?, val league: PlayerRank?) : SubmitState
+    /** The profile's nickname was refused as somebody else's. */
+    data object ProfileNickTaken : SubmitState
 }
 
 /**
@@ -88,6 +114,68 @@ class LeaderboardApi(
 
     /** Top 10 of the daily route of UTC day [day] (the same day number the game seeds it with). */
     suspend fun fetchDaily(day: Long): List<LeaderboardEntry> = fetchEntries("$baseUrl/api/v2/daily?day=$day")
+
+    /** Reserves [name] for this install's profile, behind the same checks as a score. */
+    suspend fun claimNick(name: String, playerId: String): ClaimResult {
+        val clientTime = System.currentTimeMillis()
+        val nonce = randomNonce()
+        val appVersion = BuildConfig.VERSION_CODE
+        // Must match profileMessage on the server, field for field.
+        val message = listOf("v2profile", name, clientTime, nonce, appVersion, certDigest, playerId).joinToString("|")
+        val integrityToken = integrity.request(integrityNonce(message))
+        return withContext(Dispatchers.IO) {
+            try {
+                val payload = JSONObject()
+                    .put("name", name)
+                    .put("clientTime", clientTime)
+                    .put("nonce", nonce)
+                    .put("appVersion", appVersion)
+                    .put("certDigest", certDigest)
+                    .put("playerId", playerId)
+                    .put("signature", hmac(message))
+                if (integrityToken != null) payload.put("integrityToken", integrityToken)
+                val req = Request.Builder()
+                    .url("$baseUrl/api/v2/profile")
+                    .header("x-api-key", apiKey)
+                    .post(payload.toString().toRequestBody(json))
+                    .build()
+                client.newCall(req).execute().use { resp ->
+                    val o = try { JSONObject(resp.body?.string().orEmpty()) } catch (_: Exception) { JSONObject() }
+                    when {
+                        resp.isSuccessful -> ClaimResult.Ok(o.optString("name", name))
+                        o.optString("error") == "name_taken" -> ClaimResult.Taken
+                        o.optString("error") == "invalid" -> ClaimResult.Invalid
+                        o.optString("error") == "untrusted_app" -> ClaimResult.Unverified
+                        o.optString("error") == "update_required" -> ClaimResult.UpdateRequired
+                        else -> ClaimResult.Failed
+                    }
+                }
+            } catch (_: Exception) {
+                ClaimResult.Failed
+            }
+        }
+    }
+
+    /** Top 10 of league week [week]. */
+    suspend fun fetchWeekly(week: Long): List<LeaderboardEntry> = fetchEntries("$baseUrl/api/v2/weekly?week=$week")
+
+    /**
+     * Where [score] would stand on [board]; [period] is the UTC day or league week. Null on any
+     * failure: the position is a nicety and the leaderboard screen works without it.
+     */
+    suspend fun fetchRank(board: Board, score: Int, period: Long?): PlayerRank? = withContext(Dispatchers.IO) {
+        try {
+            val query = "board=${board.id}&score=$score" + (period?.let { "&period=$it" } ?: "")
+            val req = Request.Builder().url("$baseUrl/api/v2/rank?$query").get().build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext null
+                val o = JSONObject(resp.body?.string().orEmpty())
+                PlayerRank(o.getInt("rank"), o.optBoolean("capped", false))
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     private suspend fun fetchEntries(url: String): List<LeaderboardEntry> = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(url).get().build()
@@ -164,6 +252,8 @@ class LeaderboardApi(
                     accepted = o.optBoolean("accepted", false),
                     rank = if (o.has("rank")) o.getInt("rank") else null,
                     qualified = o.optBoolean("qualified", false),
+                    weeklyRank = if (o.has("weeklyRank")) o.getInt("weeklyRank") else null,
+                    capped = o.optBoolean("capped", false),
                 )
             }
         }

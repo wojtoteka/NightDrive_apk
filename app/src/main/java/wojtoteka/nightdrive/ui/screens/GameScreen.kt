@@ -2,13 +2,16 @@ package wojtoteka.nightdrive.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -30,12 +32,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,18 +46,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.Strings
 import wojtoteka.nightdrive.engine.GamePhase
+import wojtoteka.nightdrive.net.PlayerRank
 import wojtoteka.nightdrive.net.SubmitState
 import wojtoteka.nightdrive.ui.Destination
 import wojtoteka.nightdrive.ui.GameViewModel
@@ -66,6 +68,7 @@ import wojtoteka.nightdrive.ui.HudPowerUp
 import wojtoteka.nightdrive.ui.PadDir
 import wojtoteka.nightdrive.ui.components.Bar
 import wojtoteka.nightdrive.ui.components.CoinIcon
+import wojtoteka.nightdrive.ui.components.NickField
 import wojtoteka.nightdrive.ui.components.Overline
 import wojtoteka.nightdrive.ui.components.Panel
 import wojtoteka.nightdrive.ui.components.PauseGlyph
@@ -85,6 +88,9 @@ import kotlin.math.min
 
 /** Same cyan as the near-miss sparks on the road, so the tag reads as their label. */
 private val NearMissColor = Color(0xFF37E7FF)
+
+/** Same amber as the flames behind the car during a burn. */
+private val NitroColor = Color(0xFFFFB020)
 
 /** Dark drop shadow so HUD text stays legible over the bright sun and neon grid, without a glow. */
 private val hudShadow = Shadow(Color(0xCC000000), Offset(0f, 2f), 6f)
@@ -108,9 +114,22 @@ fun GameScreen(vm: GameViewModel) {
 
         // At rest the joystick sits just above the road's near neon line instead of straddling it.
         val restBottom = (roadEdgeFromBottom(maxWidth.value, maxHeight.value) + 12f).coerceAtLeast(14f).dp
-        val restStart = with(LocalDensity.current) {
-            WindowInsets.safeDrawing.getLeft(this, LocalLayoutDirection.current).toDp()
-        } + 24.dp
+        val joystickRight = vm.profileState.joystickRight
+        val direction = LocalLayoutDirection.current
+        val (insetLeft, insetRight) = with(LocalDensity.current) {
+            WindowInsets.safeDrawing.getLeft(this, direction).toDp() to WindowInsets.safeDrawing.getRight(this, direction).toDp()
+        }
+        val restEdge = (if (joystickRight) insetRight else insetLeft) + 24.dp
+        val nitroEdge = (if (joystickRight) insetLeft else insetRight) + 28.dp
+
+        // Under the HUD, so the pause button above it still takes touches in the left-handed layout.
+        if (!vm.hudHidden && playing) {
+            // A whole half of the screen is the joystick's touch zone.
+            Joystick(
+                vm, restEdge, restBottom, joystickRight,
+                Modifier.fillMaxHeight().fillMaxWidth(0.5f).align(if (joystickRight) Alignment.CenterEnd else Alignment.CenterStart),
+            )
+        }
 
         if (!vm.hudHidden) Box(
             Modifier
@@ -126,11 +145,16 @@ fun GameScreen(vm: GameViewModel) {
             PowerUpPanel(hud.powerups, Modifier.align(Alignment.TopEnd).padding(end = 44.dp + 10.dp))
             // Below the score row, over the sun: announcements never sit on the lanes.
             Banner(hud.banner, hud.bannerVisible, Modifier.align(Alignment.TopCenter).padding(top = 76.dp))
+            hud.tutorialKey?.let { TutorialHint(it, Modifier.align(Alignment.BottomCenter).padding(bottom = restBottom)) }
         }
 
         if (!vm.hudHidden && playing) {
-            // The whole left half is the joystick's touch zone.
-            Joystick(vm, restStart, restBottom, Modifier.fillMaxHeight().fillMaxWidth(0.5f))
+            NitroButton(
+                vm,
+                Modifier
+                    .align(if (joystickRight) Alignment.BottomStart else Alignment.BottomEnd)
+                    .padding(start = if (joystickRight) nitroEdge else 0.dp, end = if (joystickRight) 0.dp else nitroEdge, bottom = restBottom + 8.dp),
+            )
         }
 
         if (hud.paused) PauseOverlay(vm)
@@ -178,7 +202,7 @@ private fun HudLeft(vm: GameViewModel, modifier: Modifier) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(hud.score.toString(), style = NDType.Score.copy(shadow = hudShadow), color = NDColors.Text)
-            if (hud.score > 0 && hud.score >= hud.highScore) {
+            if (hud.newRecord) {
                 Spacer(Modifier.width(10.dp))
                 Tag(s["new_record"].trimEnd('!'), filled = true)
             }
@@ -286,6 +310,64 @@ private fun Banner(banner: HudBanner?, visible: Boolean, modifier: Modifier) {
     }
 }
 
+/** A first-run hint: sits low over the road and never takes touches. */
+@Composable
+private fun TutorialHint(key: String, modifier: Modifier) {
+    Panel(modifier.widthIn(max = 400.dp), fill = NDColors.PanelSolid, edge = NDColors.Accent) {
+        Text(
+            LocalStrings.current[key],
+            style = NDType.Label,
+            color = NDColors.Text,
+            modifier = Modifier.padding(start = 16.dp, end = 14.dp, top = 9.dp, bottom = 10.dp),
+        )
+    }
+}
+
+/**
+ * Round thumb button: the ring fills with near misses, pulses when the tank is full and drains
+ * during a burn. Reacts on touch-down, because in a dodge the finger is never lifted in time.
+ */
+@Composable
+private fun NitroButton(vm: GameViewModel, modifier: Modifier) {
+    val hud = vm.hud
+    val ready = hud.nitroCharge >= 1f
+    val live = ready || hud.nitroActive
+    val pulse by rememberInfiniteTransition(label = "nitro").animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(420), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    Box(
+        modifier.size(88.dp).pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false).consume()
+                vm.activateNitro()
+                waitForUpOrCancellation()
+            }
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val width = 6.dp.toPx()
+            val ring = Size(size.width - width, size.height - width)
+            val corner = Offset(width / 2f, width / 2f)
+            val style = Stroke(width, cap = StrokeCap.Round)
+            val filled = if (hud.nitroActive) hud.nitroRemaining else hud.nitroCharge
+            drawCircle(NDColors.PanelSolid.copy(alpha = 0.72f))
+            if (ready) drawCircle(NitroColor.copy(alpha = 0.22f * pulse))
+            drawArc(Color.White.copy(alpha = 0.14f), -90f, 360f, false, corner, ring, style = style)
+            drawArc(NitroColor.copy(alpha = if (ready) pulse else 1f), -90f, 360f * filled, false, corner, ring, style = style)
+        }
+        Text(
+            LocalStrings.current["nitro"].uppercase(),
+            style = NDType.Overline,
+            color = if (live) NDColors.Text else NDColors.TextDim,
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 private fun PauseOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
@@ -309,7 +391,7 @@ private fun PauseOverlay(vm: GameViewModel) {
 private fun GameOverOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
     val hud = vm.hud
-    val isRecord = hud.score > 0 && hud.score >= hud.highScore
+    val isRecord = hud.newRecord
     val p = vm.profileState
     Box(
         Modifier
@@ -363,6 +445,10 @@ private fun GameOverOverlay(vm: GameViewModel) {
             }
             Spacer(Modifier.height(8.dp))
             RunStats(vm)
+            hud.crashedBy?.let {
+                Spacer(Modifier.height(10.dp))
+                Overline("${s["crashed_by"]}: ${s["crash_${it.name.lowercase()}"]}", color = NDColors.TextDim)
+            }
             NextGoals(vm, isRecord)
             LeaderboardEntrySection(vm)
             Spacer(Modifier.height(14.dp))
@@ -388,7 +474,7 @@ private fun RunStats(vm: GameViewModel) {
             Readout(s["run_time"], formatTime(hud.runSeconds), Modifier.weight(1f), small = true)
             VRule(30.dp)
             Spacer(Modifier.width(14.dp))
-            Readout(s["best_streak"], hud.bestStreak.toString(), Modifier.weight(1f), small = true)
+            Readout(s["combo"], hud.bestStreak.toString(), Modifier.weight(1f), small = true)
             VRule(30.dp)
             Spacer(Modifier.width(14.dp))
             Readout(s["mission_nearmiss_s"], hud.nearMisses.toString(), Modifier.weight(1f), small = true)
@@ -438,7 +524,9 @@ private fun NextGoals(vm: GameViewModel, isRecord: Boolean) {
 private fun LeaderboardEntrySection(vm: GameViewModel) {
     val s = LocalStrings.current
     val line: Pair<String, Color>? = when (val st = vm.submitState) {
-        is SubmitState.Done -> "${s["saved_rank"]} #${st.rank ?: "?"}" to NDColors.Positive
+        is SubmitState.Done -> "${s[if (st.league) "saved_rank_league" else "saved_rank"]} #${st.rank ?: "?"}" to NDColors.Positive
+        is SubmitState.Standing -> standingLine(s, st) to if (st.improved) NDColors.Positive else NDColors.TextDim
+        SubmitState.ProfileNickTaken -> s["profile_nick_taken"] to NDColors.Danger
         SubmitState.Submitting -> s["submitting"] to NDColors.TextDim
         SubmitState.Failed -> s["submit_failed"] to NDColors.Danger
         SubmitState.Offline -> s["submit_offline"] to NDColors.TextFaint
@@ -466,31 +554,19 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
     Panel(Modifier.fillMaxWidth(), edge = NDColors.Accent) {
         Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)) {
             if (vm.submitState == SubmitState.NameTaken) Overline(s["name_taken"], color = NDColors.Danger)
-            else Overline(if (vm.hud.dailyRun) s["you_qualified_daily"] else s["you_qualified"], color = NDColors.Accent)
+            else Overline(
+                s[
+                    when {
+                        vm.hud.dailyRun -> "you_qualified_daily"
+                        vm.qualifiesLeagueOnly -> "you_qualified_league"
+                        else -> "you_qualified"
+                    }
+                ],
+                color = NDColors.Accent,
+            )
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .heightIn(min = 44.dp)
-                        .clip(Corner.control)
-                        .background(NDColors.Inset)
-                        .border(BorderStroke(1.dp, NDColors.LineStrong), Corner.control)
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (name.isEmpty()) Text(s["enter_name"], style = NDType.Label, color = NDColors.TextFaint)
-                    BasicTextField(
-                        value = name,
-                        onValueChange = { input -> name = input.filter { it.isLetterOrDigit() || it in " _.-" }.take(16) },
-                        singleLine = true,
-                        textStyle = NDType.Label.copy(color = NDColors.Text),
-                        cursorBrush = SolidColor(NDColors.Accent),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { submit() }),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                NickField(name, { name = it }, { submit() }, Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 PrimaryButton(s["submit_score"], { submit() }, enabled = name.trim().isNotEmpty())
             }
@@ -498,18 +574,28 @@ private fun LeaderboardEntrySection(vm: GameViewModel) {
     }
 }
 
+/** "Saved · Leaderboard #57 · League #12": where the player's profile stands after a run. */
+private fun standingLine(s: Strings, st: SubmitState.Standing): String {
+    fun place(r: PlayerRank) = "#${r.rank}${if (r.capped) "+" else ""}"
+    val places = listOfNotNull(
+        st.rank?.let { "${s[if (st.daily) "board_daily" else "leaderboard"]} ${place(it)}" },
+        st.league?.let { "${s["board_weekly"]} ${place(it)}" },
+    )
+    return (listOf(s[if (st.improved) "auto_saved" else "auto_standing"]) + places).joinToString(" · ")
+}
+
 private fun fmtMult(m: Float): String = if (m == m.toInt().toFloat()) m.toInt().toString() else m.toString()
 
 /**
- * Floating joystick, Brawl Stars style. It rests bottom-left, but a touch anywhere in its zone (the
- * left half of the screen) moves the base under the finger and the knob follows the drag (clamped
+ * Floating joystick, Brawl Stars style. It rests in a bottom corner, but a touch anywhere in its
+ * zone (one half of the screen, the right one in the left-handed layout) moves the base under the finger and the knob follows the drag (clamped
  * to the rim); the offset turns into the engine's digital directions, one per axis past
  * [JOY_THRESHOLD] of the radius - so diagonals come for free as an 8-way stick. Multi-touch safe
  * (it tracks the finger that went down on it), and while it's held its input takes priority over
  * the slide-to-steer surface, same as the old pad.
  */
 @Composable
-private fun Joystick(vm: GameViewModel, restStart: Dp, restBottom: Dp, modifier: Modifier = Modifier) {
+private fun Joystick(vm: GameViewModel, restEdge: Dp, restBottom: Dp, onRight: Boolean, modifier: Modifier = Modifier) {
     val base = 150.dp
     val knob = 58.dp
     var center by remember { mutableStateOf<Offset?>(null) }   // null = resting
@@ -561,7 +647,8 @@ private fun Joystick(vm: GameViewModel, restStart: Dp, restBottom: Dp, modifier:
     ) {
         val active = center != null
         val r = base.toPx() / 2f
-        val c = center ?: Offset(restStart.toPx() + r, size.height - restBottom.toPx() - r)
+        val restX = if (onRight) size.width - restEdge.toPx() - r else restEdge.toPx() + r
+        val c = center ?: Offset(restX, size.height - restBottom.toPx() - r)
         // Base: translucent white disc, white rim and a cross of ticks marking the four axes.
         drawCircle(Color.White.copy(alpha = if (active) 0.16f else 0.10f), r, c)
         drawCircle(

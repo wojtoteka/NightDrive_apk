@@ -48,6 +48,7 @@ import wojtoteka.nightdrive.ui.components.Meter
 import wojtoteka.nightdrive.ui.components.NavRow
 import wojtoteka.nightdrive.ui.components.Overline
 import wojtoteka.nightdrive.ui.components.Panel
+import wojtoteka.nightdrive.ui.components.PersonGlyph
 import wojtoteka.nightdrive.ui.components.PrimaryButton
 import wojtoteka.nightdrive.ui.components.Readout
 import wojtoteka.nightdrive.ui.components.Rule
@@ -75,6 +76,8 @@ fun MenuScreen(vm: GameViewModel) {
     ) {
         // Top right: balance + settings
         Row(Modifier.align(Alignment.TopEnd), verticalAlignment = Alignment.CenterVertically) {
+            ProfileChip(p.profileNick.ifEmpty { s["profile"] }) { vm.goTo(Destination.PROFILE) }
+            Spacer(Modifier.width(8.dp))
             Panel {
                 CoinReadout(p.totalCoins, Modifier.padding(horizontal = 14.dp, vertical = 11.dp))
             }
@@ -129,6 +132,27 @@ fun MenuScreen(vm: GameViewModel) {
                 Text(s["tip_controls"], style = NDType.Caption, color = NDColors.TextFaint)
             }
         }
+    }
+}
+
+/** The player's nickname (or an invitation to set one), opening the profile. */
+@Composable
+private fun ProfileChip(label: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    Row(
+        Modifier
+            .clip(Corner.control)
+            .background(NDColors.Panel)
+            .focusRing(isNavFocus(focused))
+            .clickable(interaction, null, onClick = onClick)
+            .heightIn(min = 44.dp)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PersonGlyph()
+        Spacer(Modifier.width(9.dp))
+        Text(label, style = NDType.Label, color = NDColors.Text, maxLines = 1)
     }
 }
 

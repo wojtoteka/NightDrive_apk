@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -49,6 +50,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,12 +58,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import wojtoteka.nightdrive.domain.Boost
 import wojtoteka.nightdrive.domain.BoostDurationUpgrade
+import wojtoteka.nightdrive.domain.CarBodies
+import wojtoteka.nightdrive.domain.CarBody
 import wojtoteka.nightdrive.domain.Boosts
 import wojtoteka.nightdrive.domain.PowerUpType
 import wojtoteka.nightdrive.domain.SHIELD_CAPACITY_PRICE
 import wojtoteka.nightdrive.domain.SHIELD_PRICE
 import wojtoteka.nightdrive.domain.Skin
 import wojtoteka.nightdrive.domain.Skins
+import wojtoteka.nightdrive.domain.Trail
+import wojtoteka.nightdrive.domain.TrailStyle
+import wojtoteka.nightdrive.domain.Trails
 import wojtoteka.nightdrive.domain.WorldTheme
 import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.ui.Destination
@@ -78,6 +85,7 @@ import wojtoteka.nightdrive.ui.components.ScreenHeader
 import wojtoteka.nightdrive.ui.components.ShieldGlyph
 import wojtoteka.nightdrive.ui.components.Tag
 import wojtoteka.nightdrive.ui.components.isNavFocus
+import wojtoteka.nightdrive.render.RetroCanvas
 import wojtoteka.nightdrive.ui.theme.Corner
 import wojtoteka.nightdrive.ui.theme.LocalStrings
 import wojtoteka.nightdrive.ui.theme.NDColors
@@ -85,7 +93,8 @@ import wojtoteka.nightdrive.ui.theme.NDType
 import wojtoteka.nightdrive.ui.theme.Space
 
 private enum class ShopTab(val key: String) {
-    SKINS("tab_skins"), THEMES("tab_themes"), SHIELD("tab_shield"), BOOSTS("tab_boosts"), UPGRADES("tab_upgrades")
+    SKINS("tab_skins"), BODIES("tab_bodies"), TRAILS("tab_trails"), THEMES("tab_themes"),
+    SHIELD("tab_shield"), BOOSTS("tab_boosts"), UPGRADES("tab_upgrades"),
 }
 
 @Composable
@@ -122,7 +131,27 @@ fun ShopScreen(vm: GameViewModel) {
                         selected = p.selectedSkin == skin.id,
                         affordable = p.totalCoins >= skin.price,
                         onTap = { vm.onSkinTapped(skin.id) },
-                    ) { SkinPreview(skin, Modifier.size(width = 120.dp, height = 68.dp)) }
+                    ) { CarPreview(CarBodies.byId(p.selectedBody), skin, Modifier.size(width = 120.dp, height = 68.dp)) }
+                }
+                ShopTab.BODIES -> CardRow(CarBodies.all, { it.id }) { body ->
+                    ItemCard(
+                        name = s[body.nameKey],
+                        price = body.price,
+                        owned = p.ownedBodies.contains(body.id),
+                        selected = p.selectedBody == body.id,
+                        affordable = p.totalCoins >= body.price,
+                        onTap = { vm.onBodyTapped(body.id) },
+                    ) { CarPreview(body, Skins.byId(p.selectedSkin), Modifier.size(width = 120.dp, height = 68.dp)) }
+                }
+                ShopTab.TRAILS -> CardRow(Trails.all, { it.id }) { trail ->
+                    ItemCard(
+                        name = s[trail.nameKey],
+                        price = trail.price,
+                        owned = p.ownedTrails.contains(trail.id),
+                        selected = p.selectedTrail == trail.id,
+                        affordable = p.totalCoins >= trail.price,
+                        onTap = { vm.onTrailTapped(trail.id) },
+                    ) { TrailPreview(trail, Skins.byId(p.selectedSkin), Modifier.fillMaxSize()) }
                 }
                 ShopTab.THEMES -> CardRow(WorldThemes.all, { it.id }) { theme ->
                     ItemCard(
@@ -151,7 +180,7 @@ fun ShopScreen(vm: GameViewModel) {
 private fun TabBar(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     Panel(Modifier.fillMaxWidth()) {
         Rule(Modifier.align(Alignment.BottomStart))
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             labels.forEachIndexed { i, label ->
                 val active = i == selected
                 val interaction = remember { MutableInteractionSource() }
@@ -477,23 +506,63 @@ private fun ThemePreview(theme: WorldTheme, modifier: Modifier) {
     }
 }
 
+/** The original car as a side profile, so previews can treat every body the same way. */
+private val BoxOutline = floatArrayOf(-1f, -1f, -1f, 1f, 1f, 1f, 1f, -1f)
+
 /** Wireframe car in the skin's colours - same construction as the in-game car. */
 @Composable
-private fun SkinPreview(skin: Skin, modifier: Modifier) {
+private fun CarPreview(car: CarBody, skin: Skin, modifier: Modifier) {
     Canvas(modifier) {
         val w = size.width; val h = size.height
         val body = Color(skin.bodyColor); val acc = Color(skin.accentColor)
         val sw = 1.6.dp.toPx()
         val fx0 = w * 0.42f; val fx1 = w * 0.90f; val fy0 = h * 0.18f; val fy1 = h * 0.52f
         val nx0 = w * 0.10f; val nx1 = w * 0.66f; val ny0 = h * 0.40f; val ny1 = h * 0.76f
-        drawLine(acc, Offset(nx0, ny0), Offset(fx0, fy0), sw, StrokeCap.Round)
-        drawLine(acc, Offset(nx1, ny0), Offset(fx1, fy0), sw, StrokeCap.Round)
-        drawLine(acc, Offset(nx1, ny1), Offset(fx1, fy1), sw, StrokeCap.Round)
-        drawLine(acc, Offset(nx0, ny1), Offset(fx0, fy1), sw, StrokeCap.Round)
-        drawRect(acc, Offset(fx0, fy0), Size(fx1 - fx0, fy1 - fy0), style = Stroke(sw))
-        drawRect(body, Offset(nx0, ny0), Size(nx1 - nx0, ny1 - ny0), style = Stroke(sw * 1.3f))
+        val outline = car.outline ?: BoxOutline
+        fun px(x0: Float, x1: Float, u: Float) = (x0 + x1) / 2f + u * (x1 - x0) / 2f
+        fun py(y0: Float, y1: Float, v: Float) = (y0 + y1) / 2f - v * (y1 - y0) / 2f
+        fun face(x0: Float, x1: Float, y0: Float, y1: Float) = Path().apply {
+            moveTo(px(x0, x1, outline[0]), py(y0, y1, outline[1]))
+            var i = 2
+            while (i < outline.size) { lineTo(px(x0, x1, outline[i]), py(y0, y1, outline[i + 1])); i += 2 }
+            close()
+        }
+        var i = 0
+        while (i < outline.size) {
+            drawLine(
+                acc,
+                Offset(px(nx0, nx1, outline[i]), py(ny0, ny1, outline[i + 1])),
+                Offset(px(fx0, fx1, outline[i]), py(fy0, fy1, outline[i + 1])),
+                sw, StrokeCap.Round,
+            )
+            i += 2
+        }
+        drawPath(face(fx0, fx1, fy0, fy1), acc, style = Stroke(sw))
+        drawPath(face(nx0, nx1, ny0, ny1), body, style = Stroke(sw * 1.3f))
         val r = h * 0.12f
         drawCircle(body, r, Offset(nx0 + r * 1.2f, ny1), style = Stroke(sw))
         drawCircle(body, r, Offset(nx1 - r * 1.2f, ny1), style = Stroke(sw))
+    }
+}
+
+/** The neon streak on its own, fading out to the left. */
+@Composable
+private fun TrailPreview(trail: Trail, skin: Skin, modifier: Modifier) {
+    Canvas(modifier) {
+        val w = size.width; val h = size.height
+        if (trail.style == TrailStyle.NONE) {
+            drawLine(NDColors.LineStrong, Offset(w * 0.2f, h / 2f), Offset(w * 0.8f, h / 2f), 1.dp.toPx())
+            return@Canvas
+        }
+        val steps = 18
+        val thick = if (trail.style == TrailStyle.RIBBON) 4.dp.toPx() else 2.5.dp.toPx()
+        val lanes = if (trail.style == TrailStyle.TWIN) listOf(0.38f, 0.62f) else listOf(0.5f)
+        for (k in 0 until steps) {
+            val x0 = w * (0.9f - 0.8f * k / steps)
+            val x1 = w * (0.9f - 0.8f * (k + 1) / steps)
+            val base = if (trail.style == TrailStyle.RAINBOW) Color(RetroCanvas.hsl100(k * 20)) else Color(skin.bodyColor)
+            val color = base.copy(alpha = 1f - k / steps.toFloat())
+            for (lane in lanes) drawLine(color, Offset(x0, h * lane), Offset(x1, h * lane), thick, StrokeCap.Round)
+        }
     }
 }

@@ -62,7 +62,8 @@ object GameConfig {
     const val STAGE_MS = 60_000L
     const val STAGE_FADE_MS = 3_000f             // cross-fade between two themes
 
-    // --- Late-game waves (see WaveKind) ---
+    // --- Road events (see WaveKind): the lighter ones from the first minute, the hard ones later ---
+    const val EVENTS_START_MS = 45_000L
     const val WAVES_START_MS = 120_000L          // the difficulty ramp tops out around here
     const val WAVE_GAP_MIN_MS = 30_000
     const val WAVE_GAP_MAX_MS = 45_000
@@ -73,6 +74,22 @@ object GameConfig {
     val CONVOY_LANES = floatArrayOf(-46f, -21f, 2f, 22f)
     const val FOG_MS = 12_000L
     const val FOG_FADE_MS = 1_500L
+    const val POLICE_MS = 5_500L
+    const val POLICE_CARS = 3
+    const val POLICE_INTERVAL_MS = 1_500L
+    const val POLICE_SPEED = 3f                  // units per tick, driving to the right
+    const val POLICE_SPAWN_MARGIN = 230f         // starts this far past the left edge
+    const val ROADWORKS_MS = 6_000L
+    const val BARRIER_INTERVAL_MS = 800L
+    const val BARRIER_SPAWN_X = 520f
+    const val BARRIER_SPEED = 1f
+    val ROADWORKS_UPPER_LANES = floatArrayOf(2f, 22f)
+    val ROADWORKS_LOWER_LANES = floatArrayOf(-46f, -21f)
+    const val ROADWORKS_TRAFFIC_MIN_MS = 1_100f  // regular traffic thins out while a lane is shut
+    const val GOLD_MS = 9_000L
+    const val GOLD_COIN_INTERVAL_MS = 380L
+    const val GOLD_COIN_CAP = 30
+    const val GOLD_TRAFFIC_MIN_MS = 1_400f
 
     // --- Coins ---
     const val COIN_SPAWN_X = 500f
@@ -80,6 +97,12 @@ object GameConfig {
     const val MAX_COINS = 6
     const val COIN_MAGNET_PULL = 28f             // divisor: closer/frame = distance / 28
     const val COIN_POP_STEP = 0.05f              // pop animation decrement per tick
+    const val COIN_PATTERN_UNLOCK_S = 8f
+    const val COIN_PATTERN_CHANCE = 0.22f
+    const val COIN_PATTERN_LENGTH = 6
+    const val COIN_PATTERN_SPACING = 34f
+    const val COIN_ARC_HEIGHT = 20f
+    const val COIN_ZIGZAG_HEIGHT = 12f
 
     // --- Power-ups ---
     const val POWERUP_SPAWN_X = 500f
@@ -103,6 +126,17 @@ object GameConfig {
     const val NEAR_MISS_POINTS = 1f
     const val NEAR_MISS_FLASH_MS = 900L          // how long the HUD shows the "close!" tag
 
+    // --- Nitro: near misses fill it, then it burns through traffic ---
+    const val NITRO_NEAR_MISSES = 6
+    const val NITRO_MS = 2_500L
+    const val NITRO_WORLD_SPEED = 1.7f
+    const val NITRO_SMASH_POINTS = 1f
+
+    // --- Daily route ghost ---
+    const val GHOST_SAMPLE_MS = 200L
+    const val GHOST_MAX_SAMPLES = 3_000          // ten minutes
+    const val GHOST_SCALE = 8f                   // world units to the stored fixed-point shorts
+
     // --- Combo ---
     const val COMBO_TIMEOUT_MS = 3500L
     const val COMBO_T1 = 3   // x1.5
@@ -117,6 +151,9 @@ object GameConfig {
 
     // --- Daily ---
     const val DAY_MS = 86_400_000L
+
+    /** League week of a UTC day number; weeks start on Monday, same formula as the ranking server. */
+    fun weekOf(dayKey: Long): Long = (dayKey + 3L) / 7L
 
     /** 0 below the first tier, then 1..4 for x1.5 / x2 / x3 / x4. */
     fun comboTier(streak: Int): Int = when {

@@ -64,6 +64,7 @@ fun NightDriveApp(vm: GameViewModel) {
                         Destination.ACHIEVEMENTS -> AchievementsScreen(vm)
                         Destination.SETTINGS -> SettingsScreen(vm)
                         Destination.LEADERBOARD -> LeaderboardScreen(vm)
+                        Destination.PROFILE -> ProfileScreen(vm)
                     }
                 }
             }
