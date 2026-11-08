@@ -35,6 +35,8 @@ enum class AchievementKind {
     NEAR_MISS,         // lifetime cars passed by a hair
     MISSIONS,          // lifetime daily missions completed
     DAILY_RUNS,        // lifetime daily-route runs driven
+    NITRO_SMASH,       // lifetime cars and barriers ploughed through on nitro
+    BODY_COUNT,        // car bodies owned (incl. the free default)
 }
 
 data class Achievement(
@@ -72,7 +74,49 @@ object Achievements {
         Achievement("nearmiss200", "ach_nearmiss200", "ach_nearmiss200_d", 200, AchievementKind.NEAR_MISS, 100),
         Achievement("missions30", "ach_missions30", "ach_missions30_d", 30, AchievementKind.MISSIONS, 75),
         Achievement("dailyrun10", "ach_dailyrun10", "ach_dailyrun10_d", 10, AchievementKind.DAILY_RUNS, 40),
+        Achievement("smash50", "ach_smash50", "ach_smash50_d", 50, AchievementKind.NITRO_SMASH, 60),
+        Achievement("bodiesAll", "ach_bodies_all", "ach_bodies_all_d", CarBodies.all.size, AchievementKind.BODY_COUNT, 250),
     )
+}
+
+/**
+ * A car's silhouette: [outline] is the side profile as (u, v) pairs, u from -1 (rear) to 1 (nose)
+ * along the body and v from -1 (sills) to 1 (roof). Purely visual - every body has the same
+ * hitbox, so the ranking stays fair. A null outline is the original box.
+ */
+class CarBody(val id: String, val nameKey: String, val price: Int, val outline: FloatArray?)
+
+object CarBodies {
+    const val DEFAULT_ID = "box"
+
+    val all: List<CarBody> = listOf(
+        CarBody(DEFAULT_ID, "body_box", 0, null),
+        CarBody("coupe", "body_coupe", 600, floatArrayOf(-1f, -1f, -1f, 0.1f, -0.55f, 0.25f, -0.2f, 1f, 0.35f, 1f, 0.65f, 0.2f, 1f, 0.05f, 1f, -1f)),
+        CarBody("muscle", "body_muscle", 1000, floatArrayOf(-1f, -1f, -1f, 0.35f, -0.6f, 0.35f, -0.35f, 1f, 0.2f, 1f, 0.4f, 0.35f, 1f, 0.25f, 1f, -1f)),
+        CarBody("van", "body_van", 1400, floatArrayOf(-1f, -1f, -1f, 1f, 0.55f, 1f, 0.95f, 0.1f, 1f, 0f, 1f, -1f)),
+        CarBody("pickup", "body_pickup", 1800, floatArrayOf(-1f, -1f, -1f, 0.1f, -0.2f, 0.1f, -0.15f, 1f, 0.35f, 1f, 0.6f, 0.2f, 1f, 0.1f, 1f, -1f)),
+        CarBody("cyber", "body_cyber", 2500, floatArrayOf(-1f, -1f, -1f, 0.55f, -0.1f, 1f, 1f, -0.1f, 1f, -1f)),
+    )
+
+    fun byId(id: String): CarBody = all.firstOrNull { it.id == id } ?: all.first()
+}
+
+enum class TrailStyle { NONE, RIBBON, TWIN, RAINBOW }
+
+/** The neon streak the player's car leaves behind; drawn in the car's colour unless RAINBOW. */
+data class Trail(val id: String, val nameKey: String, val price: Int, val style: TrailStyle)
+
+object Trails {
+    const val DEFAULT_ID = "none"
+
+    val all: List<Trail> = listOf(
+        Trail(DEFAULT_ID, "trail_none", 0, TrailStyle.NONE),
+        Trail("ribbon", "trail_ribbon", 400, TrailStyle.RIBBON),
+        Trail("twin", "trail_twin", 800, TrailStyle.TWIN),
+        Trail("rainbow", "trail_rainbow", 1200, TrailStyle.RAINBOW),
+    )
+
+    fun byId(id: String): Trail = all.firstOrNull { it.id == id } ?: all.first()
 }
 
 /**

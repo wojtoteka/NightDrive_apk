@@ -22,6 +22,7 @@ class PlayerProfile {
     var lifetimeBoostsUsed: Int = 0
     var lifetimePowerups: Int = 0
     var lifetimeNearMisses: Int = 0
+    var lifetimeSmashes: Int = 0
 
     // Starter boosts bought in the shop: stock of one-shot activations consumed at the start
     // of the next run (one of each kind per run), on top of the normal in-run random spawns.
@@ -59,6 +60,10 @@ class PlayerProfile {
     var selectedSkin: String = Skins.DEFAULT_ID
     var ownedThemes: MutableSet<String> = mutableSetOf(WorldThemes.DEFAULT_ID)
     var selectedTheme: String = WorldThemes.DEFAULT_ID
+    var ownedBodies: MutableSet<String> = mutableSetOf(CarBodies.DEFAULT_ID)
+    var selectedBody: String = CarBodies.DEFAULT_ID
+    var ownedTrails: MutableSet<String> = mutableSetOf(Trails.DEFAULT_ID)
+    var selectedTrail: String = Trails.DEFAULT_ID
 
     // Achievements (ids of unlocked ones)
     var unlockedAchievements: MutableSet<String> = mutableSetOf()
@@ -77,11 +82,24 @@ class PlayerProfile {
     var dailyRunAttempts: Int = 0
     var lifetimeDailyRuns: Int = 0
 
+    // Today's best daily-route run as (x, y) fixed-point samples, replayed as a ghost car.
+    var ghostDayKey: Long = Long.MIN_VALUE
+    var ghostTrack: ShortArray = ShortArray(0)
+
+    // This week's best normal run (the league position is worked out from it).
+    var weeklyKey: Long = Long.MIN_VALUE
+    var weeklyBest: Int = 0
+
+    // First-run hints: 0 steer, 1 coins, 2 near misses, 3 nitro, [TUTORIAL_DONE] finished.
+    var tutorialStep: Int = 0
+
     // Settings
     var sceneryRotation: Boolean = true   // cycle owned world themes stage by stage during a run
     var musicEnabled: Boolean = true
     var sfxEnabled: Boolean = true
     var hapticsEnabled: Boolean = true
+    var joystickRight: Boolean = false    // left-handed layout: joystick right, nitro left
+    var musicTrack: Int = 0
     var language: String = Language.SYSTEM.code
 
     // Last nickname used for the online leaderboard (pre-fills the entry field)
@@ -92,6 +110,11 @@ class PlayerProfile {
     var playerId: String = ""
 
     fun ownsSkin(id: String): Boolean = ownedSkins.contains(id)
+
+    companion object {
+        const val TUTORIAL_NITRO = 3
+        const val TUTORIAL_DONE = 4
+    }
 
     fun copyFrom(other: PlayerProfile) {
         highScore = other.highScore
@@ -114,10 +137,15 @@ class PlayerProfile {
         lifetimeBoostsUsed = other.lifetimeBoostsUsed
         lifetimePowerups = other.lifetimePowerups
         lifetimeNearMisses = other.lifetimeNearMisses
+        lifetimeSmashes = other.lifetimeSmashes
         ownedSkins = other.ownedSkins.toMutableSet()
         selectedSkin = other.selectedSkin
         ownedThemes = other.ownedThemes.toMutableSet()
         selectedTheme = other.selectedTheme
+        ownedBodies = other.ownedBodies.toMutableSet()
+        selectedBody = other.selectedBody
+        ownedTrails = other.ownedTrails.toMutableSet()
+        selectedTrail = other.selectedTrail
         unlockedAchievements = other.unlockedAchievements.toMutableSet()
         dailyDayKey = other.dailyDayKey
         dailyStreak = other.dailyStreak
@@ -129,10 +157,17 @@ class PlayerProfile {
         dailyRunBest = other.dailyRunBest
         dailyRunAttempts = other.dailyRunAttempts
         lifetimeDailyRuns = other.lifetimeDailyRuns
+        ghostDayKey = other.ghostDayKey
+        ghostTrack = other.ghostTrack
+        weeklyKey = other.weeklyKey
+        weeklyBest = other.weeklyBest
+        tutorialStep = other.tutorialStep
         sceneryRotation = other.sceneryRotation
         musicEnabled = other.musicEnabled
         sfxEnabled = other.sfxEnabled
         hapticsEnabled = other.hapticsEnabled
+        joystickRight = other.joystickRight
+        musicTrack = other.musicTrack
         language = other.language
         playerName = other.playerName
         playerId = other.playerId

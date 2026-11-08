@@ -9,6 +9,7 @@ import wojtoteka.nightdrive.domain.Missions
 import wojtoteka.nightdrive.domain.PlayerProfile
 import wojtoteka.nightdrive.domain.PowerUpType
 import wojtoteka.nightdrive.engine.GameConfig as C
+import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -77,6 +78,10 @@ class GameEngine(
     var bestStreakInRun = 0; private set
     var powerupsInRun = 0; private set
     var wavesInRun = 0; private set
+    var smashesInRun = 0; private set
+    var nitroUsesInRun = 0; private set
+    /** What ended this run, null while it is still going. */
+    var crashedBy: EnemyKind? = null; private set
     /** The shield has blocked a hit this run (ends the "clean run" mission's count). */
     private var shieldUsedInRun = false
     var stage = 0; private set
@@ -123,12 +128,38 @@ class GameEngine(
     private var doubleDurMs = 1L
     private var coinRushDurMs = 1L
 
+    // Nitro. The UI only asks for it; the request is served on the next tick.
+    var nitroActive = false; private set
+    private var nitroPoints = 0
+    private var nitroUntil = 0L
+    private var nitroRequested = false
+    /** How full the nitro tank is, 0..1. */
+    val nitroCharge: Float get() = nitroPoints.toFloat() / C.NITRO_NEAR_MISSES
+    val nitroReady: Boolean get() = nitroPoints >= C.NITRO_NEAR_MISSES
+    /** What is left of a burn in progress, 0..1 (for the HUD ring). */
+    val nitroRemaining: Float get() = if (nitroActive) frac(nitroUntil, C.NITRO_MS) else 0f
+    /** Everything but the player's own car speeds up during a burn. */
+    private val worldSpeed: Float get() = if (nitroActive) C.NITRO_WORLD_SPEED else 1f
+
+    // Daily route ghost: this run's track, and today's best run replayed next to it.
+    private val ghostRecording = ShortArray(C.GHOST_MAX_SAMPLES * 2)
+    private var ghostRecorded = 0
+    var ghostVisible = false; private set
+    var ghostX = 0f; private set
+    var ghostY = 0f; private set
+
+    /** Coins earned by today's login streak, waiting for the UI to announce them. */
+    var pendingStreakReward = 0; private set
+
     // Late-game waves
     var wave: WaveKind? = null; private set
     private var lastWave: WaveKind? = null
     private var waveStartMs = 0L
     private var waveEndMs = 0L
-    private var nextWaveRunMs = C.WAVES_START_MS
+    private var nextWaveRunMs = C.EVENTS_START_MS
+    private var waveSpawned = 0
+    private var waveNextSpawnMs = 0L
+    private var roadworksLanes = C.ROADWORKS_UPPER_LANES
 
     /** Fog density 0..1 for the renderer: fades in and out over [C.FOG_FADE_MS]. */
     val fogAmount: Float
@@ -201,8 +232,11 @@ class GameEngine(
         newHighAnnounced = false
         highScoreAtStart = profile.highScore
         nearMissesInRun = 0; lastNearMissMs = 0L; lastNearMissPoints = 0
-        bestStreakInRun = 0; powerupsInRun = 0
-        wave = null; lastWave = null; wavesInRun = 0; nextWaveRunMs = C.WAVES_START_MS
+        bestStreakInRun = 0; powerupsInRun = 0; smashesInRun = 0; nitroUsesInRun = 0
+        crashedBy = null
+        nitroActive = false; nitroPoints = 0; nitroRequested = false
+        ghostRecorded = 0; ghostVisible = false
+        wave = null; lastWave = null; wavesInRun = 0; nextWaveRunMs = C.EVENTS_START_MS
         stage = 0; streakStartMs = 0L
         shieldUsedInRun = false
         clockMs = 0L; clockFrac = 0f; enemyTimer = 0L; coinTimer = 0L; powerupTimer = 0L; lastCoinMs = 0L
@@ -238,6 +272,14 @@ class GameEngine(
         if (profile.pendingDoubleStarts > 0) { profile.pendingDoubleStarts--; profile.lifetimeBoostsUsed++; applyTimed(PowerUpType.DOUBLE, starterDuration(PowerUpType.DOUBLE)) }
         if (profile.pendingCoinRushStarts > 0) { profile.pendingCoinRushStarts--; profile.lifetimeBoostsUsed++; applyTimed(PowerUpType.COIN_RUSH, starterDuration(PowerUpType.COIN_RUSH)) }
     }
+
+    /** Asks for a nitro burn; ignored unless the tank is full. */
+    fun requestNitro() {
+        nitroRequested = true
+    }
+
+    /** Hands the login-streak coins over to the UI once, for its announcement. */
+    fun takeStreakReward(): Int = pendingStreakReward.also { pendingStreakReward = 0 }
 
     fun togglePause() {
         if (phase == GamePhase.PLAYING) paused = !paused
@@ -285,6 +327,7 @@ class GameEngine(
 
         updateComboTimeout()
         updatePowerupTimers()
+        updateNitro()
         updatePlayer()
         updateStage()
         updateWaves()
@@ -305,6 +348,7 @@ class GameEngine(
             if (!newHighAnnounced && highScoreAtStart > 0) { events += GameEvent.NewHighScore; newHighAnnounced = true }
         }
         trackRunMissions()
+        if (mode == RunMode.DAILY) updateGhost()
     }
 
     // ---- Player ----------------------------------------------------------------------------
@@ -339,19 +383,28 @@ class GameEngine(
 
     private fun updateEnemies() {
         val despawnX = -halfWidth - C.DESPAWN_MARGIN
-        val factor = if (slowmoActive) 0.5f else 1f
+        val rightEdge = halfWidth + C.DESPAWN_MARGIN
+        val slow = if (slowmoActive) 0.5f else 1f
+        val factor = slow * worldSpeed
         // Index loop (here and in the other entity updates): same forward order and removal
         // semantics as an iterator, without allocating one every 60Hz tick.
         var i = 0
         while (i < enemies.size) {
             val e = enemies[i]
-            e.x -= (e.speed + globalTime / 55f) * factor
+            if (e.kind == EnemyKind.POLICE) e.x += e.speed * slow
+            else e.x -= (e.speed + globalTime / 55f) * factor
             if (e.changingLane && e.x < halfWidth * C.LANE_CHANGE_TRIGGER) {
                 val step = C.LANE_CHANGE_SPEED * factor
                 e.y = if (e.targetY > e.y) min(e.targetY, e.y + step) else max(e.targetY, e.y - step)
             }
-            if (e.x <= despawnX) { enemies.removeAt(i); continue }
+            val gone = if (e.kind == EnemyKind.POLICE) e.x >= rightEdge else e.x <= despawnX
+            if (gone) { enemies.removeAt(i); continue }
             if (enemyOverlaps(e, 0f, 0f)) {
+                if (nitroActive) {
+                    enemies.removeAt(i)
+                    smash(e)
+                    continue
+                }
                 if (shieldCharges > 0) {
                     if (mode == RunMode.DAILY) runShieldCharges -= 1 else profile.shieldCharges -= 1
                     profile.lifetimeShieldBlocks += 1
@@ -361,7 +414,7 @@ class GameEngine(
                     continue
                 } else {
                     enemies.removeAt(i)
-                    triggerGameOver()
+                    triggerGameOver(e.kind)
                     return
                 }
             }
@@ -411,6 +464,7 @@ class GameEngine(
         lastCoinMs = clockMs // a near miss keeps the combo timer alive, like a coin
         bumpStreak()
         nearMissesInRun += 1
+        if (!nitroActive && nitroPoints < C.NITRO_NEAR_MISSES) nitroPoints += 1
         profile.lifetimeNearMisses += 1
         addMission(MissionType.NEAR_MISS, 1)
         lastNearMissMs = clockMs
@@ -420,8 +474,15 @@ class GameEngine(
         checkAchievements()
     }
 
+    /** Barriers stand on the road in numbers; only moving traffic counts against the cap. */
+    private fun movingTraffic(): Int {
+        var n = 0
+        for (i in enemies.indices) if (enemies[i].kind != EnemyKind.BARRIER) n++
+        return n
+    }
+
     private fun maybeSpawnEnemy() {
-        if (clockMs - enemyTimer < enemySpawnDelay || enemies.size >= C.MAX_ENEMIES) return
+        if (clockMs - enemyTimer < enemySpawnDelay || movingTraffic() >= C.MAX_ENEMIES) return
         var speedMult = 1f + (trafficPace / 30) * 0.1f
         speedMult = min(speedMult, C.SPEED_MULT_MAX)
         val hue = trafficRng.intInRange(0, 359)
@@ -432,7 +493,7 @@ class GameEngine(
         val shift = trafficRng.nextFloat(C.LANE_CHANGE_MIN, C.LANE_CHANGE_MAX)
         val up = trafficRng.next() < 0.5f
         enemies += when (kind) {
-            EnemyKind.CAR -> Enemy(C.ENEMY_SPAWN_X, y, speedMult, hue)
+            EnemyKind.CAR, EnemyKind.POLICE, EnemyKind.BARRIER -> Enemy(C.ENEMY_SPAWN_X, y, speedMult, hue)
             EnemyKind.TRUCK -> Enemy(C.ENEMY_SPAWN_X, y, speedMult * C.TRUCK_SPEED, hue, kind)
             EnemyKind.SPEEDER -> {
                 events += GameEvent.SpeederIncoming
@@ -447,7 +508,12 @@ class GameEngine(
         enemyTimer = clockMs
         val lo = 870f - ceil(globalTime * 2f) - difficulty * 10f
         val hi = 3900f - ceil(globalTime * 25f) - difficulty * 20f
-        enemySpawnDelay = max(C.ENEMY_SPAWN_MIN_MS, trafficRng.intInRange(lo, hi).toFloat())
+        val floor = when (wave) {
+            WaveKind.ROADWORKS -> C.ROADWORKS_TRAFFIC_MIN_MS
+            WaveKind.GOLD -> C.GOLD_TRAFFIC_MIN_MS
+            else -> C.ENEMY_SPAWN_MIN_MS
+        }
+        enemySpawnDelay = max(floor, trafficRng.intInRange(lo, hi).toFloat())
     }
 
     /** Which kind of traffic a spawn becomes, given a uniform [roll] in [0, 1). */
@@ -475,6 +541,7 @@ class GameEngine(
     private fun updateWaves() {
         val runMs = clockMs - streakStartMs
         if (wave != null) {
+            stepWave()
             if (clockMs >= waveEndMs) {
                 wave = null
                 nextWaveRunMs = runMs + waveRng.intInRange(C.WAVE_GAP_MIN_MS, C.WAVE_GAP_MAX_MS)
@@ -482,16 +549,52 @@ class GameEngine(
             return
         }
         if (runMs < nextWaveRunMs) return
-        val kind = if (waveRng.next() < 0.5f) WaveKind.CONVOY else WaveKind.FOG
+        val kind = nextWaveKind(runMs)
         wave = kind
         lastWave = kind
         waveStartMs = clockMs
         wavesInRun += 1
+        waveSpawned = 0
+        waveNextSpawnMs = clockMs
         when (kind) {
             WaveKind.CONVOY -> { spawnConvoy(); waveEndMs = clockMs + C.CONVOY_MS }
             WaveKind.FOG -> waveEndMs = clockMs + C.FOG_MS
+            WaveKind.POLICE -> waveEndMs = clockMs + C.POLICE_MS
+            WaveKind.GOLD -> waveEndMs = clockMs + C.GOLD_MS
+            WaveKind.ROADWORKS -> {
+                roadworksLanes = if (waveRng.next() < 0.5f) C.ROADWORKS_UPPER_LANES else C.ROADWORKS_LOWER_LANES
+                waveEndMs = clockMs + C.ROADWORKS_MS
+            }
         }
         events += GameEvent.WaveStarted(kind)
+    }
+
+    /** Never the same event twice in a row. */
+    private fun nextWaveKind(runMs: Long): WaveKind {
+        val pool = if (runMs < C.WAVES_START_MS) WaveKind.early else WaveKind.entries
+        val index = waveRng.intInRange(0, pool.size - 1)
+        return if (pool[index] == lastWave) pool[(index + 1) % pool.size] else pool[index]
+    }
+
+    /** The events that keep spawning things while they last. */
+    private fun stepWave() {
+        if (clockMs < waveNextSpawnMs) return
+        when (wave) {
+            WaveKind.POLICE -> if (waveSpawned < C.POLICE_CARS) {
+                val y = player.y.coerceIn(C.LANE_Y_MIN, C.LANE_Y_MAX)
+                enemies += Enemy(-halfWidth - C.POLICE_SPAWN_MARGIN, y, C.POLICE_SPEED, 0, EnemyKind.POLICE)
+                events += GameEvent.PoliceIncoming
+                waveSpawned += 1
+                waveNextSpawnMs = clockMs + C.POLICE_INTERVAL_MS
+            }
+            WaveKind.ROADWORKS -> {
+                for (lane in roadworksLanes) {
+                    enemies += Enemy(C.BARRIER_SPAWN_X, lane, C.BARRIER_SPEED, 0, EnemyKind.BARRIER)
+                }
+                waveNextSpawnMs = clockMs + C.BARRIER_INTERVAL_MS
+            }
+            else -> {}
+        }
     }
 
     /** A wall of same-speed cars across every lane but one, far enough out to read the gap. */
@@ -516,7 +619,7 @@ class GameEngine(
         while (i < coins.size) {
             val c = coins[i]
             if (!c.popping) {
-                c.x -= c.speed + globalTime / 55f
+                c.x -= (c.speed + globalTime / 55f) * worldSpeed
                 if (magnetActive) {
                     c.x += (player.x - c.x) / C.COIN_MAGNET_PULL
                     c.y += (player.y - c.y) / C.COIN_MAGNET_PULL
@@ -526,7 +629,7 @@ class GameEngine(
                 c.pop -= C.COIN_POP_STEP
             }
             if (c.x <= despawnX) { coins.removeAt(i); continue }
-            if (c.scored) { awardCoin(); coins.removeAt(i); continue }
+            if (c.scored) { awardCoin(c); coins.removeAt(i); continue }
             i++
         }
     }
@@ -539,14 +642,15 @@ class GameEngine(
             c.y + hb >= player.y - ph / 4f - 10f && c.y - hb <= player.y + ph / 4f - 10f
     }
 
-    private fun awardCoin() {
+    private fun awardCoin(c: Coin) {
         // First coin of the run fires any purchased starter boosts, so this very coin already
         // benefits from double points / coin rush. Unused stock survives a coinless run.
         if (starterBoostsPending) {
             starterBoostsPending = false
             consumeStarterBoosts()
         }
-        val value = ceil(1f * comboMultiplier * (if (doubleActive) 2f else 1f)).toInt()
+        // A gold wave pays in coins; at full combo value it would decide the whole ranking.
+        val value = if (c.gold) 1 else ceil(1f * comboMultiplier * (if (doubleActive) 2f else 1f)).toInt()
         score += value
         coinsInSession += 1
         lastCoinMs = clockMs
@@ -571,12 +675,87 @@ class GameEngine(
     }
 
     private fun maybeSpawnCoin() {
+        if (wave == WaveKind.GOLD) { maybeSpawnGoldCoin(); return }
         if (clockMs - coinTimer < coinSpawnDelay || coins.size >= C.MAX_COINS) return
-        coins += Coin(C.COIN_SPAWN_X, coinRng.intInRange(21f, -60f).toFloat(), C.COIN_BASE_SPEED)
+        // Always draw the same number of values, single coin or pattern, so the sequence stays
+        // reproducible from the seed.
+        val roll = coinRng.next()
+        val shape = coinRng.intInRange(0, 2)
+        val y = coinRng.intInRange(21f, -60f).toFloat()
+        val runSec = (clockMs - streakStartMs) / 1000f
+        if (runSec >= C.COIN_PATTERN_UNLOCK_S && roll < C.COIN_PATTERN_CHANCE) spawnCoinPattern(shape, y)
+        else coins += Coin(C.COIN_SPAWN_X, y, C.COIN_BASE_SPEED)
         coinTimer = clockMs
         val lo = 720f - ceil(globalTime * 2f)
         val hi = 5000f - ceil(globalTime * 45f)
         coinSpawnDelay = coinRng.intInRange(lo, hi).toFloat()
+    }
+
+    /** A line (0), an arc (1) or a zigzag (2) of coins that draws a path through the traffic. */
+    private fun spawnCoinPattern(shape: Int, y: Float) {
+        val base = y.coerceIn(-38f, 2f)
+        val last = C.COIN_PATTERN_LENGTH - 1
+        for (k in 0..last) {
+            val offset = when (shape) {
+                1 -> C.COIN_ARC_HEIGHT * sin(k * PI.toFloat() / last)
+                2 -> if (k % 2 == 0) C.COIN_ZIGZAG_HEIGHT else -C.COIN_ZIGZAG_HEIGHT
+                else -> 0f
+            }
+            coins += Coin(C.COIN_SPAWN_X + k * C.COIN_PATTERN_SPACING, base + offset, C.COIN_BASE_SPEED)
+        }
+    }
+
+    /** A gold wave is one long ribbon of coins weaving across the road. */
+    private fun maybeSpawnGoldCoin() {
+        if (clockMs - coinTimer < C.GOLD_COIN_INTERVAL_MS || coins.size >= C.GOLD_COIN_CAP) return
+        val t = (clockMs - waveStartMs) / 1000f
+        coins += Coin(halfWidth + 40f, -15f + 33f * sin(t * 1.1f), C.COIN_BASE_SPEED, gold = true)
+        coinTimer = clockMs
+    }
+
+    // ---- Nitro -----------------------------------------------------------------------------
+
+    private fun updateNitro() {
+        if (nitroActive && clockMs > nitroUntil) nitroActive = false
+        if (!nitroRequested) return
+        nitroRequested = false
+        if (nitroActive || !nitroReady) return
+        nitroActive = true
+        nitroUntil = clockMs + C.NITRO_MS
+        nitroPoints = 0
+        nitroUsesInRun += 1
+        events += GameEvent.NitroStarted
+    }
+
+    private fun smash(e: Enemy) {
+        val value = ceil(C.NITRO_SMASH_POINTS * comboMultiplier * (if (doubleActive) 2f else 1f)).toInt()
+        score += value
+        lastCoinMs = clockMs
+        bumpStreak()
+        smashesInRun += 1
+        profile.lifetimeSmashes += 1
+        spawnSmashParticles(e)
+        events += GameEvent.NitroSmash(value)
+        checkAchievements()
+    }
+
+    // ---- Daily route ghost -----------------------------------------------------------------
+
+    private fun updateGhost() {
+        val runMs = clockMs - streakStartMs
+        if (ghostRecorded < C.GHOST_MAX_SAMPLES && runMs >= ghostRecorded * C.GHOST_SAMPLE_MS) {
+            ghostRecording[ghostRecorded * 2] = (player.x * C.GHOST_SCALE).toInt().toShort()
+            ghostRecording[ghostRecorded * 2 + 1] = (player.y * C.GHOST_SCALE).toInt().toShort()
+            ghostRecorded += 1
+        }
+        val track = profile.ghostTrack
+        val exact = runMs.toFloat() / C.GHOST_SAMPLE_MS
+        val index = exact.toInt()
+        ghostVisible = profile.ghostDayKey == runDayKey && index < track.size / 2 - 1
+        if (!ghostVisible) return
+        val t = exact - index
+        ghostX = (track[index * 2] + (track[index * 2 + 2] - track[index * 2]) * t) / C.GHOST_SCALE
+        ghostY = (track[index * 2 + 1] + (track[index * 2 + 3] - track[index * 2 + 1]) * t) / C.GHOST_SCALE
     }
 
     // ---- Power-ups -------------------------------------------------------------------------
@@ -587,7 +766,7 @@ class GameEngine(
         while (i < powerups.size) {
             val p = powerups[i]
             if (!p.collected) {
-                p.x -= C.POWERUP_SPEED + globalTime / 70f
+                p.x -= (C.POWERUP_SPEED + globalTime / 70f) * worldSpeed
                 if (powerupHitsPlayer(p)) {
                     p.collected = true
                     applyPowerup(p.type)
@@ -698,12 +877,14 @@ class GameEngine(
 
     // ---- Game over -------------------------------------------------------------------------
 
-    private fun triggerGameOver() {
+    private fun triggerGameOver(cause: EnemyKind) {
+        crashedBy = cause
+        nitroActive = false
         val survived = survivalSeconds
         if (survived > profile.longestStreakTimeSec) profile.longestStreakTimeSec = survived
         streak = 0
         trackRunMissions()
-        if (mode == RunMode.DAILY) recordDailyRun()
+        if (mode == RunMode.DAILY) recordDailyRun() else recordLeagueRun()
         checkAchievements()
         spawnCrashParticles()
         gameOverSlide = 370f
@@ -763,7 +944,20 @@ class GameEngine(
         if (score > p.dailyRunBest) {
             p.dailyRunBest = score
             dailyBestBeaten = true
+            p.ghostDayKey = runDayKey
+            p.ghostTrack = ghostRecording.copyOf(ghostRecorded * 2)
         }
+    }
+
+    /** This week's best normal run: what the player's league position is worked out from. */
+    private fun recordLeagueRun() {
+        val p = profile
+        val week = C.weekOf(runDayKey)
+        if (p.weeklyKey != week) {
+            p.weeklyKey = week
+            p.weeklyBest = 0
+        }
+        if (score > p.weeklyBest) p.weeklyBest = score
     }
 
     // ---- Daily missions --------------------------------------------------------------------
@@ -779,6 +973,9 @@ class GameEngine(
         val prev = p.dailyDayKey
         if (prev != Long.MIN_VALUE && today - prev == 1L) p.dailyStreak += 1
         else p.dailyStreak = 1
+        val reward = Missions.streakReward(p.dailyStreak)
+        p.totalCoins += reward
+        pendingStreakReward += reward
         if (p.dailyStreak > p.bestDailyStreak) p.bestDailyStreak = p.dailyStreak
         p.dailyDayKey = today
         p.missions = Missions.forDay(today)
@@ -856,6 +1053,8 @@ class GameEngine(
         AchievementKind.NEAR_MISS -> profile.lifetimeNearMisses >= a.goal
         AchievementKind.MISSIONS -> profile.lifetimeMissions >= a.goal
         AchievementKind.DAILY_RUNS -> profile.lifetimeDailyRuns >= a.goal
+        AchievementKind.NITRO_SMASH -> profile.lifetimeSmashes >= a.goal
+        AchievementKind.BODY_COUNT -> profile.ownedBodies.size >= a.goal
     }
 
     // ---- Particles & stars -----------------------------------------------------------------
@@ -879,6 +1078,16 @@ class GameEngine(
                 x = mx, y = my,
                 vx = rng.nextFloat(-2.6f, -0.6f), vy = rng.nextFloat(-0.8f, 1.6f),
                 life = 1f, maxLife = 1f, color = 0xFF37E7FF, size = rng.nextFloat(0.8f, 1.6f),
+            )
+        }
+    }
+
+    private fun spawnSmashParticles(e: Enemy) {
+        repeat(14) {
+            particles += Particle(
+                x = e.x, y = e.y,
+                vx = rng.nextFloat(-1f, 5f), vy = rng.nextFloat(-1f, 4f),
+                life = 1f, maxLife = 1f, color = 0xFFFFB020, size = rng.nextFloat(1f, 2.8f),
             )
         }
     }

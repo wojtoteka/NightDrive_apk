@@ -20,8 +20,11 @@ import javax.crypto.spec.SecretKeySpec
 /** One row of the Top 10. */
 data class LeaderboardEntry(val rank: Int, val name: String, val score: Int)
 
-/** Which ranking: the all-time Top 10 or today's daily route. */
-enum class Board { GLOBAL, DAILY }
+/** Which ranking: the all-time Top 10, today's daily route or this week's league. */
+enum class Board(val id: String) { GLOBAL("global"), DAILY("daily"), WEEKLY("weekly") }
+
+/** Where a score stands on a board; [capped] means below the rows the server keeps. */
+data class PlayerRank(val rank: Int, val capped: Boolean)
 
 /** UI state for the leaderboard screen. */
 sealed interface LeaderboardState {
@@ -32,13 +35,20 @@ sealed interface LeaderboardState {
 }
 
 /** Result of submitting a score; [error] is the server's error code when it was refused. */
-data class SubmitResult(val accepted: Boolean, val rank: Int?, val qualified: Boolean, val error: String? = null)
+data class SubmitResult(
+    val accepted: Boolean,
+    val rank: Int?,
+    val qualified: Boolean,
+    val error: String? = null,
+    val weeklyRank: Int? = null,
+)
 
 /** State of a score submission, for the game-over UI. */
 sealed interface SubmitState {
     data object Idle : SubmitState
     data object Submitting : SubmitState
-    data class Done(val rank: Int?) : SubmitState
+    /** [league]: [rank] is the place in this week's league rather than the all-time board. */
+    data class Done(val rank: Int?, val league: Boolean = false) : SubmitState
     data object Failed : SubmitState
     data object Offline : SubmitState
     /** Someone else owns that nickname - the entry field stays open for another one. */
@@ -88,6 +98,27 @@ class LeaderboardApi(
 
     /** Top 10 of the daily route of UTC day [day] (the same day number the game seeds it with). */
     suspend fun fetchDaily(day: Long): List<LeaderboardEntry> = fetchEntries("$baseUrl/api/v2/daily?day=$day")
+
+    /** Top 10 of league week [week]. */
+    suspend fun fetchWeekly(week: Long): List<LeaderboardEntry> = fetchEntries("$baseUrl/api/v2/weekly?week=$week")
+
+    /**
+     * Where [score] would stand on [board]; [period] is the UTC day or league week. Null on any
+     * failure: the position is a nicety and the leaderboard screen works without it.
+     */
+    suspend fun fetchRank(board: Board, score: Int, period: Long?): PlayerRank? = withContext(Dispatchers.IO) {
+        try {
+            val query = "board=${board.id}&score=$score" + (period?.let { "&period=$it" } ?: "")
+            val req = Request.Builder().url("$baseUrl/api/v2/rank?$query").get().build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext null
+                val o = JSONObject(resp.body?.string().orEmpty())
+                PlayerRank(o.getInt("rank"), o.optBoolean("capped", false))
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     private suspend fun fetchEntries(url: String): List<LeaderboardEntry> = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(url).get().build()
@@ -164,6 +195,7 @@ class LeaderboardApi(
                     accepted = o.optBoolean("accepted", false),
                     rank = if (o.has("rank")) o.getInt("rank") else null,
                     qualified = o.optBoolean("qualified", false),
+                    weeklyRank = if (o.has("weeklyRank")) o.getInt("weeklyRank") else null,
                 )
             }
         }

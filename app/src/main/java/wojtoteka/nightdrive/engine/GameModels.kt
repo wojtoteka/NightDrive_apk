@@ -22,9 +22,10 @@ class Player {
 /**
  * Traffic variety. Plain cars are the original enemy; the others unlock as a run goes on:
  * trucks are long and slow, lane changers blink and drift into the next lane once on screen,
- * speeders come in very fast but are announced by a flashing marker at the right edge.
+ * speeders come in very fast but are announced by a flashing marker at the right edge. Police
+ * cars and barriers only appear during their road events (see [WaveKind]).
  */
-enum class EnemyKind { CAR, TRUCK, LANE_CHANGER, SPEEDER }
+enum class EnemyKind { CAR, TRUCK, LANE_CHANGER, SPEEDER, POLICE, BARRIER }
 
 class Enemy(
     var x: Float,
@@ -50,6 +51,8 @@ class Coin(
     var x: Float,
     var y: Float,
     val speed: Float,
+    /** Part of a gold wave's ribbon: pays a flat point, whenever it gets picked up. */
+    val gold: Boolean = false,
 ) {
     var popping = false
     var pop = 1f          // 1 -> 0 pop animation once collected
@@ -65,11 +68,18 @@ class PowerUp(
 }
 
 /**
- * Late-game events that start after [GameConfig.WAVES_START_MS] of a run: a convoy is a wall of
- * cars across the road with one lane left open, fog hides the right part of the road so traffic
- * shows up late.
+ * Road events. Police cars come up from behind, roadworks shut one half of the road and a gold
+ * wave strings coins across it; those three start after [GameConfig.EVENTS_START_MS]. A convoy is
+ * a wall of cars with one lane left open, fog hides the right part of the road so traffic shows up
+ * late; those two wait for [GameConfig.WAVES_START_MS].
  */
-enum class WaveKind { CONVOY, FOG }
+enum class WaveKind {
+    CONVOY, FOG, POLICE, ROADWORKS, GOLD;
+
+    companion object {
+        val early = listOf(POLICE, ROADWORKS, GOLD)
+    }
+}
 
 /** Parallax background star. */
 class Star(var x: Float, var y: Float)
@@ -101,6 +111,11 @@ sealed interface GameEvent {
     data class ComboTierUp(val tier: Int) : GameEvent
     /** A speeder just spawned off screen; its edge marker is about to start flashing. */
     data object SpeederIncoming : GameEvent
+    /** A police car just spawned behind the player; its edge marker is about to start flashing. */
+    data object PoliceIncoming : GameEvent
+    data object NitroStarted : GameEvent
+    /** Nitro ploughed through something, worth [points]. */
+    data class NitroSmash(val points: Int) : GameEvent
     data class AchievementUnlocked(val id: String) : GameEvent
     data class MissionCompleted(val type: MissionType, val goal: Int, val reward: Int) : GameEvent
     data class AllMissionsCompleted(val bonus: Int) : GameEvent

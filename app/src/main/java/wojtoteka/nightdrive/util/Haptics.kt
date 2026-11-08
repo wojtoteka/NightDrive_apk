@@ -34,6 +34,9 @@ class Haptics(context: Context) {
     /** Two quick taps: something is coming that isn't on screen yet (a speeder). */
     fun warning() = pattern(longArrayOf(0, 22, 60, 22))
 
+    /** A long rising shove for the start of a nitro burn. */
+    fun nitro() = pattern(longArrayOf(0, 40, 30, 60, 30, 90))
+
     /** Reaching combo tier [tier] (1-4): the higher the tier, the stronger the bump. */
     fun comboTier(tier: Int) = when {
         tier >= 4 -> pattern(longArrayOf(0, 35, 50, 45))

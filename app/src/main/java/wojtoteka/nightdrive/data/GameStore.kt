@@ -1,6 +1,7 @@
 package wojtoteka.nightdrive.data
 
 import android.content.Context
+import android.util.Base64
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -10,12 +11,15 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import java.nio.ByteBuffer
 import kotlinx.coroutines.flow.first
 import wojtoteka.nightdrive.domain.AchievementKind
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.CarBodies
 import wojtoteka.nightdrive.domain.Missions
 import wojtoteka.nightdrive.domain.PlayerProfile
 import wojtoteka.nightdrive.domain.Skins
+import wojtoteka.nightdrive.domain.Trails
 import wojtoteka.nightdrive.domain.WorldThemes
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "nightdrive")
@@ -51,10 +55,15 @@ class GameStore(private val context: Context) {
             lifetimeBoostsUsed = prefs[K.lifetimeBoostsUsed] ?: 0
             lifetimePowerups = prefs[K.lifetimePowerups] ?: 0
             lifetimeNearMisses = prefs[K.lifetimeNearMisses] ?: 0
+            lifetimeSmashes = prefs[K.lifetimeSmashes] ?: 0
             ownedSkins = (prefs[K.ownedSkins] ?: setOf(Skins.DEFAULT_ID)).toMutableSet()
             selectedSkin = prefs[K.selectedSkin] ?: Skins.DEFAULT_ID
             ownedThemes = (prefs[K.ownedThemes] ?: setOf(WorldThemes.DEFAULT_ID)).toMutableSet()
             selectedTheme = prefs[K.selectedTheme] ?: WorldThemes.DEFAULT_ID
+            ownedBodies = (prefs[K.ownedBodies] ?: setOf(CarBodies.DEFAULT_ID)).toMutableSet()
+            selectedBody = prefs[K.selectedBody] ?: CarBodies.DEFAULT_ID
+            ownedTrails = (prefs[K.ownedTrails] ?: setOf(Trails.DEFAULT_ID)).toMutableSet()
+            selectedTrail = prefs[K.selectedTrail] ?: Trails.DEFAULT_ID
             unlockedAchievements = (prefs[K.achievements] ?: emptySet()).toMutableSet()
             // lifetimeCoins is new; migrate existing saves so an already-unlocked coin
             // achievement doesn't regress to "in progress" once totalCoins was spent below its goal.
@@ -75,10 +84,18 @@ class GameStore(private val context: Context) {
             dailyRunBest = prefs[K.dailyRunBest] ?: 0
             dailyRunAttempts = prefs[K.dailyRunAttempts] ?: 0
             lifetimeDailyRuns = prefs[K.lifetimeDailyRuns] ?: 0
+            ghostDayKey = prefs[K.ghostDay] ?: Long.MIN_VALUE
+            ghostTrack = decodeTrack(prefs[K.ghostTrack])
+            weeklyKey = prefs[K.weeklyKey] ?: Long.MIN_VALUE
+            weeklyBest = prefs[K.weeklyBest] ?: 0
+            // Players from before the hints know how to drive; they only need to meet nitro.
+            tutorialStep = prefs[K.tutorial] ?: if (highScore > 0) PlayerProfile.TUTORIAL_NITRO else 0
             sceneryRotation = prefs[K.sceneryRotation] ?: true
             musicEnabled = prefs[K.music] ?: true
             sfxEnabled = prefs[K.sfx] ?: true
             hapticsEnabled = prefs[K.haptics] ?: true
+            joystickRight = prefs[K.joystickRight] ?: false
+            musicTrack = prefs[K.musicTrack] ?: 0
             language = prefs[K.language] ?: "system"
             playerName = prefs[K.playerName] ?: ""
             playerId = prefs[K.playerId] ?: ""
@@ -110,10 +127,15 @@ class GameStore(private val context: Context) {
             e[K.lifetimeBoostsUsed] = p.lifetimeBoostsUsed
             e[K.lifetimePowerups] = p.lifetimePowerups
             e[K.lifetimeNearMisses] = p.lifetimeNearMisses
+            e[K.lifetimeSmashes] = p.lifetimeSmashes
             e[K.ownedSkins] = p.ownedSkins
             e[K.selectedSkin] = p.selectedSkin
             e[K.ownedThemes] = p.ownedThemes
             e[K.selectedTheme] = p.selectedTheme
+            e[K.ownedBodies] = p.ownedBodies
+            e[K.selectedBody] = p.selectedBody
+            e[K.ownedTrails] = p.ownedTrails
+            e[K.selectedTrail] = p.selectedTrail
             e[K.achievements] = p.unlockedAchievements
             e[K.dailyDay] = p.dailyDayKey
             e[K.dailyStreak] = p.dailyStreak
@@ -125,6 +147,11 @@ class GameStore(private val context: Context) {
             e[K.dailyRunBest] = p.dailyRunBest
             e[K.dailyRunAttempts] = p.dailyRunAttempts
             e[K.lifetimeDailyRuns] = p.lifetimeDailyRuns
+            e[K.ghostDay] = p.ghostDayKey
+            e[K.ghostTrack] = encodeTrack(p.ghostTrack)
+            e[K.weeklyKey] = p.weeklyKey
+            e[K.weeklyBest] = p.weeklyBest
+            e[K.tutorial] = p.tutorialStep
             // The single daily challenge from before 3.6 is gone for good.
             e.remove(K.legacyDailyDone)
             e.remove(K.legacyDailyProgress)
@@ -134,6 +161,8 @@ class GameStore(private val context: Context) {
             e[K.music] = p.musicEnabled
             e[K.sfx] = p.sfxEnabled
             e[K.haptics] = p.hapticsEnabled
+            e[K.joystickRight] = p.joystickRight
+            e[K.musicTrack] = p.musicTrack
             e[K.language] = p.language
             e[K.playerName] = p.playerName
             if (p.playerId.isNotEmpty()) e[K.playerId] = p.playerId
@@ -162,10 +191,15 @@ class GameStore(private val context: Context) {
         p.lifetimeBoostsUsed = 0
         p.lifetimePowerups = 0
         p.lifetimeNearMisses = 0
+        p.lifetimeSmashes = 0
         p.ownedSkins = mutableSetOf(Skins.DEFAULT_ID)
         p.selectedSkin = Skins.DEFAULT_ID
         p.ownedThemes = mutableSetOf(WorldThemes.DEFAULT_ID)
         p.selectedTheme = WorldThemes.DEFAULT_ID
+        p.ownedBodies = mutableSetOf(CarBodies.DEFAULT_ID)
+        p.selectedBody = CarBodies.DEFAULT_ID
+        p.ownedTrails = mutableSetOf(Trails.DEFAULT_ID)
+        p.selectedTrail = Trails.DEFAULT_ID
         p.unlockedAchievements = mutableSetOf()
         p.missions = if (p.dailyDayKey != Long.MIN_VALUE) Missions.forDay(p.dailyDayKey) else mutableListOf()
         p.missionsBonusClaimed = false
@@ -173,7 +207,27 @@ class GameStore(private val context: Context) {
         p.dailyRunBest = 0
         p.dailyRunAttempts = 0
         p.lifetimeDailyRuns = 0
+        p.ghostDayKey = Long.MIN_VALUE
+        p.ghostTrack = ShortArray(0)
+        p.weeklyKey = Long.MIN_VALUE
+        p.weeklyBest = 0
         save(p)
+    }
+
+    private fun encodeTrack(track: ShortArray): String {
+        val bytes = ByteBuffer.allocate(track.size * 2)
+        bytes.asShortBuffer().put(track)
+        return Base64.encodeToString(bytes.array(), Base64.NO_WRAP)
+    }
+
+    private fun decodeTrack(raw: String?): ShortArray {
+        if (raw.isNullOrEmpty()) return ShortArray(0)
+        return try {
+            val shorts = ByteBuffer.wrap(Base64.decode(raw, Base64.NO_WRAP)).asShortBuffer()
+            ShortArray(shorts.remaining()).also { shorts.get(it) }
+        } catch (_: IllegalArgumentException) {
+            ShortArray(0)
+        }
     }
 
     private object K {
@@ -198,10 +252,15 @@ class GameStore(private val context: Context) {
         val lifetimeBoostsUsed = intPreferencesKey("lifetime_boosts_used")
         val lifetimePowerups = intPreferencesKey("lifetime_powerups")
         val lifetimeNearMisses = intPreferencesKey("lifetime_near_misses")
+        val lifetimeSmashes = intPreferencesKey("lifetime_smashes")
         val ownedSkins = stringSetPreferencesKey("owned_skins")
         val selectedSkin = stringPreferencesKey("selected_skin")
         val ownedThemes = stringSetPreferencesKey("owned_themes")
         val selectedTheme = stringPreferencesKey("selected_theme")
+        val ownedBodies = stringSetPreferencesKey("owned_bodies")
+        val selectedBody = stringPreferencesKey("selected_body")
+        val ownedTrails = stringSetPreferencesKey("owned_trails")
+        val selectedTrail = stringPreferencesKey("selected_trail")
         val achievements = stringSetPreferencesKey("achievements")
         val dailyDay = longPreferencesKey("daily_day")
         val dailyStreak = intPreferencesKey("daily_streak")
@@ -213,6 +272,11 @@ class GameStore(private val context: Context) {
         val dailyRunBest = intPreferencesKey("daily_run_best")
         val dailyRunAttempts = intPreferencesKey("daily_run_attempts")
         val lifetimeDailyRuns = intPreferencesKey("lifetime_daily_runs")
+        val ghostDay = longPreferencesKey("ghost_day")
+        val ghostTrack = stringPreferencesKey("ghost_track")
+        val weeklyKey = longPreferencesKey("weekly_key")
+        val weeklyBest = intPreferencesKey("weekly_best")
+        val tutorial = intPreferencesKey("tutorial_step")
         val legacyDailyDone = booleanPreferencesKey("daily_completed")
         val legacyDailyProgress = intPreferencesKey("daily_progress")
         val legacyDailyGoal = intPreferencesKey("daily_goal")
@@ -221,6 +285,8 @@ class GameStore(private val context: Context) {
         val music = booleanPreferencesKey("music_enabled")
         val sfx = booleanPreferencesKey("sfx_enabled")
         val haptics = booleanPreferencesKey("haptics_enabled")
+        val joystickRight = booleanPreferencesKey("joystick_right")
+        val musicTrack = intPreferencesKey("music_track")
         val language = stringPreferencesKey("language")
         val playerName = stringPreferencesKey("player_name")
         val playerId = stringPreferencesKey("player_id")

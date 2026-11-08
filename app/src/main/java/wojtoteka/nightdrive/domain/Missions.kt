@@ -41,8 +41,14 @@ object Missions {
     const val COUNT = 3
     private val rewards = intArrayOf(10, 15, 25)
 
+    /** Coins for each day of the login streak, in a repeating week that peaks on its last day. */
+    private val streakRewards = intArrayOf(5, 5, 10, 15, 20, 25, 60)
+
     /** Extra coins for finishing all three missions of a day. */
     const val ALL_DONE_BONUS = 20
+
+    /** What reaching day [streak] of the streak pays. A streak that has only just begun pays nothing. */
+    fun streakReward(streak: Int): Int = if (streak < 2) 0 else streakRewards[(streak - 1) % streakRewards.size]
 
     /**
      * The missions of UTC day [dayKey]. Seeded from the day alone, so every player gets the same

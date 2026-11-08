@@ -56,12 +56,18 @@ fun LeaderboardScreen(vm: GameViewModel) {
             onBack = { vm.goTo(Destination.MENU) },
             backLabel = s["back"],
             trailing = {
-                val boards = listOf(Board.GLOBAL, Board.DAILY)
-                SegmentedControl(
-                    options = listOf(s["board_global"], s["board_daily"]),
-                    selectedIndex = boards.indexOf(vm.leaderboardBoard),
-                    onSelect = { vm.selectBoard(boards[it]) },
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    vm.myRank?.let {
+                        Overline("${s["your_rank"]} #${it.rank}${if (it.capped) "+" else ""}", color = NDColors.Accent)
+                        Spacer(Modifier.width(14.dp))
+                    }
+                    val boards = listOf(Board.GLOBAL, Board.DAILY, Board.WEEKLY)
+                    SegmentedControl(
+                        options = listOf(s["board_global"], s["board_daily"], s["board_weekly"]),
+                        selectedIndex = boards.indexOf(vm.leaderboardBoard),
+                        onSelect = { vm.selectBoard(boards[it]) },
+                    )
+                }
             },
         )
         Spacer(Modifier.height(Space.section))
@@ -77,7 +83,15 @@ fun LeaderboardScreen(vm: GameViewModel) {
                 }
                 is LeaderboardState.Success ->
                     if (st.entries.isEmpty()) {
-                        StateMessage(s[if (vm.leaderboardBoard == Board.DAILY) "daily_board_empty" else "leaderboard_empty"])
+                        StateMessage(
+                            s[
+                                when (vm.leaderboardBoard) {
+                                    Board.DAILY -> "daily_board_empty"
+                                    Board.WEEKLY -> "weekly_board_empty"
+                                    Board.GLOBAL -> "leaderboard_empty"
+                                }
+                            ]
+                        )
                     }
                     else Board(st.entries)
             }

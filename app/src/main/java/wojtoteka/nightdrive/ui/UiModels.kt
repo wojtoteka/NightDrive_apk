@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import wojtoteka.nightdrive.domain.Language
 import wojtoteka.nightdrive.domain.MissionType
 import wojtoteka.nightdrive.domain.PowerUpType
+import wojtoteka.nightdrive.engine.EnemyKind
 import wojtoteka.nightdrive.engine.GamePhase
 
 /** Top-level screen the player is looking at. The animated world is drawn behind all of them. */
@@ -36,6 +37,7 @@ data class ProfileSnapshot(
     val lifetimeBoostsUsed: Int = 0,
     val lifetimePowerups: Int = 0,
     val lifetimeNearMisses: Int = 0,
+    val lifetimeSmashes: Int = 0,
     val missions: List<MissionSnapshot> = emptyList(),
     val missionsBonusClaimed: Boolean = false,
     val lifetimeMissions: Int = 0,
@@ -48,11 +50,17 @@ data class ProfileSnapshot(
     val selectedSkin: String = "classic",
     val ownedThemes: Set<String> = setOf("sunset"),
     val selectedTheme: String = "sunset",
+    val ownedBodies: Set<String> = setOf("box"),
+    val selectedBody: String = "box",
+    val ownedTrails: Set<String> = setOf("none"),
+    val selectedTrail: String = "none",
     val sceneryRotation: Boolean = true,
     val unlockedAchievements: Set<String> = emptySet(),
     val musicEnabled: Boolean = true,
     val sfxEnabled: Boolean = true,
     val hapticsEnabled: Boolean = true,
+    val joystickRight: Boolean = false,
+    val musicTrack: Int = 0,
     val language: Language = Language.SYSTEM,
 )
 
@@ -107,4 +115,10 @@ data class HudState(
     val mission: MissionSnapshot? = null,
     val highScore: Int = 0,
     val newRecord: Boolean = false,
+    val nitroCharge: Float = 0f,
+    val nitroActive: Boolean = false,
+    val nitroRemaining: Float = 0f,
+    val crashedBy: EnemyKind? = null,
+    /** Text key of the first-run hint to show, if any. */
+    val tutorialKey: String? = null,
 )

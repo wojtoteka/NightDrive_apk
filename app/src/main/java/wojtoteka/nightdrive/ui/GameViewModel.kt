@@ -14,6 +14,7 @@ import wojtoteka.nightdrive.audio.AudioController
 import wojtoteka.nightdrive.audio.Sfx
 import wojtoteka.nightdrive.data.GameStore
 import wojtoteka.nightdrive.domain.Achievements
+import wojtoteka.nightdrive.domain.CarBodies
 import wojtoteka.nightdrive.domain.DailyMission
 import wojtoteka.nightdrive.domain.Missions
 import wojtoteka.nightdrive.domain.Language
@@ -23,6 +24,7 @@ import wojtoteka.nightdrive.domain.BoostDurationUpgrade
 import wojtoteka.nightdrive.domain.SHIELD_CAPACITY_PRICE
 import wojtoteka.nightdrive.domain.SHIELD_PRICE
 import wojtoteka.nightdrive.domain.Skins
+import wojtoteka.nightdrive.domain.Trails
 import wojtoteka.nightdrive.engine.GameConfig
 import wojtoteka.nightdrive.engine.GameEngine
 import wojtoteka.nightdrive.engine.GameEvent
@@ -33,6 +35,7 @@ import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.net.Board
 import wojtoteka.nightdrive.net.LeaderboardEntry
 import wojtoteka.nightdrive.net.LeaderboardState
+import wojtoteka.nightdrive.net.PlayerRank
 import wojtoteka.nightdrive.net.SubmitState
 
 /**
@@ -63,6 +66,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     var leaderboardState by mutableStateOf<LeaderboardState>(LeaderboardState.Loading); private set
     var leaderboardBoard by mutableStateOf(Board.GLOBAL); private set
     var scoreQualifies by mutableStateOf(false); private set
+    /** The run made this week's league but not the all-time Top 10. */
+    var qualifiesLeagueOnly by mutableStateOf(false); private set
+    /** Where the player's best would stand on the open board; null until known. */
+    var myRank by mutableStateOf<PlayerRank?>(null); private set
     var submitState by mutableStateOf<SubmitState>(SubmitState.Idle); private set
 
     val lastNickname: String get() = profile.playerName
@@ -157,6 +164,11 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             selectedSkin = "classic"
             ownedThemes = mutableSetOf("sunset", "aurora")
             selectedTheme = "sunset"
+            ownedBodies = mutableSetOf("box", "coupe", "muscle")
+            selectedBody = "coupe"
+            ownedTrails = mutableSetOf("none", "ribbon")
+            selectedTrail = "ribbon"
+            tutorialStep = PlayerProfile.TUTORIAL_DONE
             unlockedAchievements = mutableSetOf(
                 "coins100", "coins1000", "score50", "score100", "score250",
                 "streak5", "streak12", "survive60", "survive120", "daily7",
@@ -204,6 +216,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             steps++
         }
         frameTick.intValue++
+        announceStreakReward()
+        advanceTutorial()
         updateHud()
         updateMusicMood(dtMs)
     }
@@ -219,6 +233,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             engine.phase == GamePhase.GAME_OVER -> { volume = MUSIC_CRASH; speed = 0.9f }
             engine.paused -> volume = MUSIC_PAUSED
             engine.phase == GamePhase.PLAYING -> {
+                if (engine.nitroActive) speed = 1.08f
                 val m = engine.comboMultiplier
                 val swell = when {
                     m >= 4f -> 0.16f
@@ -239,18 +254,24 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         for (i in engine.events.indices) {
             when (val ev = engine.events[i]) {
                 GameEvent.CoinCollected -> { audio.play(Sfx.COIN); haptics.tick() }
-                is GameEvent.PowerUpCollected -> { audio.play(Sfx.POINT); haptics.light() }
-                GameEvent.ShieldBlocked -> { audio.play(Sfx.POINT, 0.5f); haptics.medium() }
-                is GameEvent.NearMiss -> { audio.play(Sfx.POINT, 0.45f, rate = 1.5f); haptics.tick() }
-                is GameEvent.WaveStarted -> { audio.play(Sfx.POINT, 0.8f, rate = 0.6f); haptics.medium() }
+                is GameEvent.PowerUpCollected -> { audio.play(Sfx.POWERUP); haptics.light() }
+                GameEvent.ShieldBlocked -> { audio.play(Sfx.SHIELD); haptics.medium() }
+                is GameEvent.NearMiss -> { audio.play(Sfx.NEAR_MISS); haptics.tick() }
+                is GameEvent.WaveStarted -> { audio.play(Sfx.WAVE); haptics.medium() }
                 is GameEvent.StageReached -> {
                     stageBanner = stageBannerFor(ev.stage)
-                    audio.play(Sfx.POINT, 0.6f, rate = 1.2f)
+                    audio.play(Sfx.STAGE)
                     haptics.light()
                 }
                 GameEvent.NewHighScore -> haptics.success()
-                is GameEvent.ComboTierUp -> haptics.comboTier(ev.tier)
+                is GameEvent.ComboTierUp -> {
+                    audio.play(Sfx.POINT, 0.6f, rate = 0.9f + ev.tier * 0.2f)
+                    haptics.comboTier(ev.tier)
+                }
                 GameEvent.SpeederIncoming -> haptics.warning()
+                GameEvent.PoliceIncoming -> { audio.play(Sfx.SIREN); haptics.warning() }
+                GameEvent.NitroStarted -> { audio.play(Sfx.NITRO); haptics.nitro() }
+                is GameEvent.NitroSmash -> { audio.play(Sfx.SMASH); haptics.medium() }
                 GameEvent.Crash -> {
                     audio.play(Sfx.EXPLOSION)
                     audio.play(Sfx.DEFEAT)
@@ -311,7 +332,46 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             mission = hudMission(),
             highScore = profile.highScore,
             newRecord = engine.newRecord,
+            nitroCharge = engine.nitroCharge,
+            nitroActive = engine.nitroActive,
+            nitroRemaining = engine.nitroRemaining,
+            crashedBy = engine.crashedBy,
+            tutorialKey = tutorialKey(),
         )
+    }
+
+    private fun tutorialKey(): String? {
+        if (engine.phase != GamePhase.PLAYING) return null
+        return when (profile.tutorialStep) {
+            0 -> "tut_steer"
+            1 -> "tut_coins"
+            2 -> "tut_near"
+            PlayerProfile.TUTORIAL_NITRO -> if (engine.nitroReady) "tut_nitro" else null
+            else -> null
+        }
+    }
+
+    /** Each hint stays up until the player has done what it asks for. */
+    private fun advanceTutorial() {
+        if (profile.tutorialStep >= PlayerProfile.TUTORIAL_DONE || engine.phase != GamePhase.PLAYING) return
+        val done = when (profile.tutorialStep) {
+            0 -> inLeft || inRight || inUp || inDown || padLeft || padRight || padUp || padDown
+            1 -> engine.coinsInSession > 0
+            2 -> engine.nearMissesInRun > 0
+            else -> engine.nitroUsesInRun > 0
+        }
+        if (done) {
+            profile.tutorialStep += 1
+            persist()
+        }
+    }
+
+    private fun announceStreakReward() {
+        val reward = engine.takeStreakReward()
+        if (reward == 0) return
+        showToast(Toast("streak_reward", "streak_reward_t", profile.dailyStreak.toString(), "+$reward"))
+        persist()
+        refreshProfileState()
     }
 
     private fun hudMission(): MissionSnapshot? {
@@ -334,6 +394,9 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     private fun currentBanner(): HudBanner? = when (engine.waveBanner) {
         WaveKind.CONVOY -> CONVOY_BANNER
         WaveKind.FOG -> FOG_BANNER
+        WaveKind.POLICE -> POLICE_BANNER
+        WaveKind.ROADWORKS -> ROADWORKS_BANNER
+        WaveKind.GOLD -> GOLD_BANNER
         null -> if (engine.stageBannerVisible) stageBanner else null
     }
 
@@ -366,6 +429,8 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             PadDir.DOWN -> padDown = pressed
         }
     }
+
+    fun activateNitro() = engine.requestNitro()
 
     fun clearInput() {
         inLeft = false; inRight = false; inUp = false; inDown = false
@@ -409,6 +474,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun beginLeaderboardRun() {
         scoreQualifies = false
+        qualifiesLeagueOnly = false
         submitState = SubmitState.Idle
         sessionId = null
         val token = ++runToken
@@ -432,14 +498,20 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun fetchLeaderboard() {
-        if (showcase) { leaderboardState = LeaderboardState.Success(showcaseBoard); return }
+        if (showcase) {
+            leaderboardState = LeaderboardState.Success(showcaseBoard)
+            myRank = PlayerRank(57, false)
+            return
+        }
         leaderboardState = LeaderboardState.Loading
+        myRank = null
         val board = leaderboardBoard
         viewModelScope.launch {
             val state = try {
                 val top = when (board) {
                     Board.GLOBAL -> leaderboardApi.fetchTop().also { cachedTop = it }
                     Board.DAILY -> leaderboardApi.fetchDaily(today())
+                    Board.WEEKLY -> leaderboardApi.fetchWeekly(thisWeek())
                 }
                 LeaderboardState.Success(top)
             } catch (_: Exception) {
@@ -447,8 +519,27 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             }
             // A slow answer for the tab the player already left must not overwrite the new one.
             if (board == leaderboardBoard) leaderboardState = state
+            val best = localBest(board)
+            if (best <= 0) return@launch
+            val period = when (board) {
+                Board.GLOBAL -> null
+                Board.DAILY -> today()
+                Board.WEEKLY -> thisWeek()
+            }
+            val rank = leaderboardApi.fetchRank(board, best, period)
+            if (board == leaderboardBoard) myRank = rank
         }
     }
+
+    private fun localBest(board: Board): Int = when (board) {
+        Board.GLOBAL -> profile.highScore
+        Board.DAILY -> if (profile.dailyRunDayKey == today()) profile.dailyRunBest else 0
+        Board.WEEKLY -> if (profile.weeklyKey == thisWeek()) profile.weeklyBest else 0
+    }
+
+    /** Whether [finalScore] makes a full Top 10 of [top]. */
+    private fun makesTop(top: List<LeaderboardEntry>, finalScore: Int) =
+        top.size < 10 || finalScore > top.minOf { it.score }
 
     /**
      * After a run, work out whether the score would land in the Top 10 (prompts the nickname UI).
@@ -459,12 +550,22 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         gameOverScore = finalScore
         gameOverDay = dailyDay
         scoreQualifies = false
+        qualifiesLeagueOnly = false
         if (finalScore <= 0) return
         viewModelScope.launch {
             try {
                 val top = if (dailyDay == null) leaderboardApi.fetchTop().also { cachedTop = it }
                 else leaderboardApi.fetchDaily(dailyDay)
-                scoreQualifies = top.size < 10 || finalScore > top.minOf { it.score }
+                val onBoard = makesTop(top, finalScore)
+                // A normal run also counts for this week's league. A server without the league
+                // simply answers an error here, and the all-time board carries on as before.
+                val inLeague = !onBoard && dailyDay == null && try {
+                    makesTop(leaderboardApi.fetchWeekly(thisWeek()), finalScore)
+                } catch (_: Exception) {
+                    false
+                }
+                qualifiesLeagueOnly = inLeague
+                scoreQualifies = onBoard || inLeague
             } catch (_: Exception) {
                 // Can't reach the ranking - tell the player why there's no entry field.
                 submitState = SubmitState.Offline
@@ -488,9 +589,10 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
                 when {
                     r.accepted -> {
                         sessionId = null
+                        val leagueOnly = qualifiesLeagueOnly && r.weeklyRank != null
                         scoreQualifies = false
                         fetchLeaderboard()
-                        SubmitState.Done(r.rank)
+                        SubmitState.Done(if (leagueOnly) r.weeklyRank else r.rank, leagueOnly)
                     }
                     // The server rolled back: same session, the player just picks another name.
                     r.error == "name_taken" -> SubmitState.NameTaken
@@ -565,15 +667,62 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         return false
     }
 
+    /** Same buy-or-equip semantics as skins, for the car bodies. */
+    fun onBodyTapped(id: String): Boolean {
+        if (profile.ownedBodies.contains(id)) {
+            profile.selectedBody = id
+            persist(); refreshProfileState()
+            haptics.light()
+            return false
+        }
+        val body = CarBodies.byId(id)
+        if (profile.totalCoins >= body.price) {
+            profile.totalCoins -= body.price
+            profile.ownedBodies.add(id)
+            profile.selectedBody = id
+            unlockShopAchievements()
+            persist(); refreshProfileState()
+            audio.play(Sfx.COIN, 0.7f); haptics.success()
+            return true
+        }
+        haptics.medium()
+        return false
+    }
+
+    /** Same buy-or-equip semantics as skins, for the neon trails. */
+    fun onTrailTapped(id: String): Boolean {
+        if (profile.ownedTrails.contains(id)) {
+            profile.selectedTrail = id
+            persist(); refreshProfileState()
+            haptics.light()
+            return false
+        }
+        val trail = Trails.byId(id)
+        if (profile.totalCoins >= trail.price) {
+            profile.totalCoins -= trail.price
+            profile.ownedTrails.add(id)
+            profile.selectedTrail = id
+            persist(); refreshProfileState()
+            audio.play(Sfx.COIN, 0.7f); haptics.success()
+            return true
+        }
+        haptics.medium()
+        return false
+    }
+
     /**
      * Achievements whose progress moves in the shop (skin collection) would otherwise unlock only
      * on the next engine tick; check them here so the toast fires the moment the purchase lands.
      */
     private fun unlockShopAchievements() {
         for (a in Achievements.all) {
-            if (a.kind != wojtoteka.nightdrive.domain.AchievementKind.SKIN_COUNT) continue
+            val owned = when (a.kind) {
+                wojtoteka.nightdrive.domain.AchievementKind.SKIN_COUNT -> profile.ownedSkins.size
+                wojtoteka.nightdrive.domain.AchievementKind.BODY_COUNT -> profile.ownedBodies.size
+                else -> continue
+            }
             if (profile.unlockedAchievements.contains(a.id)) continue
-            if (profile.ownedSkins.size >= a.goal) {
+            if (owned >= a.goal) {
                 profile.unlockedAchievements.add(a.id)
                 profile.totalCoins += a.reward
                 audio.play(Sfx.COIN, 0.6f)
@@ -670,6 +819,14 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
     fun setSfxEnabled(v: Boolean) { profile.sfxEnabled = v; audio.sfxEnabled = v; persist(); refreshProfileState() }
     fun setHapticsEnabled(v: Boolean) { profile.hapticsEnabled = v; haptics.enabled = v; if (v) haptics.light(); persist(); refreshProfileState() }
 
+    fun setJoystickRight(v: Boolean) { profile.joystickRight = v; persist(); refreshProfileState() }
+
+    fun setMusicTrack(index: Int) {
+        profile.musicTrack = index
+        audio.selectTrack(index)
+        persist(); refreshProfileState()
+    }
+
     fun changeLanguage(lang: Language) {
         profile.language = lang.code
         language = lang
@@ -708,6 +865,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         audio.musicEnabled = profile.musicEnabled
         audio.sfxEnabled = profile.sfxEnabled
         haptics.enabled = profile.hapticsEnabled
+        audio.selectTrack(profile.musicTrack)
     }
 
     private fun persist() {
@@ -738,6 +896,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             lifetimeBoostsUsed = profile.lifetimeBoostsUsed,
             lifetimePowerups = profile.lifetimePowerups,
             lifetimeNearMisses = profile.lifetimeNearMisses,
+            lifetimeSmashes = profile.lifetimeSmashes,
             missions = profile.missions.map(::snapshotOf),
             missionsBonusClaimed = profile.missionsBonusClaimed,
             lifetimeMissions = profile.lifetimeMissions,
@@ -750,11 +909,17 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             selectedSkin = profile.selectedSkin,
             ownedThemes = profile.ownedThemes.toSet(),
             selectedTheme = profile.selectedTheme,
+            ownedBodies = profile.ownedBodies.toSet(),
+            selectedBody = profile.selectedBody,
+            ownedTrails = profile.ownedTrails.toSet(),
+            selectedTrail = profile.selectedTrail,
             sceneryRotation = profile.sceneryRotation,
             unlockedAchievements = profile.unlockedAchievements.toSet(),
             musicEnabled = profile.musicEnabled,
             sfxEnabled = profile.sfxEnabled,
             hapticsEnabled = profile.hapticsEnabled,
+            joystickRight = profile.joystickRight,
+            musicTrack = profile.musicTrack,
             language = Language.fromCode(profile.language),
         )
     }
@@ -766,9 +931,14 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
         const val MUSIC_CRASH = 0.22f
         val CONVOY_BANNER = HudBanner("wave_convoy", "wave_convoy_d", 0xFFFF3D3D)
         val FOG_BANNER = HudBanner("wave_fog", "wave_fog_d", 0xFFB8C0D8)
+        val POLICE_BANNER = HudBanner("wave_police", "wave_police_d", 0xFF4F8CFF)
+        val ROADWORKS_BANNER = HudBanner("wave_roadworks", "wave_roadworks_d", 0xFFFFB020)
+        val GOLD_BANNER = HudBanner("wave_gold", "wave_gold_d", 0xFFFFD60A)
     }
 
     private fun today(): Long = System.currentTimeMillis() / GameConfig.DAY_MS
+
+    private fun thisWeek(): Long = GameConfig.weekOf(today())
 
     private fun showAchievementToast(id: String) {
         val key = Achievements.all.firstOrNull { it.id == id }?.nameKey ?: return

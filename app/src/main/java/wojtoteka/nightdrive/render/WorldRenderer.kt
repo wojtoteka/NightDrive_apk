@@ -1,7 +1,12 @@
 package wojtoteka.nightdrive.render
 
+import wojtoteka.nightdrive.domain.CarBodies
+import wojtoteka.nightdrive.domain.CarBody
 import wojtoteka.nightdrive.domain.Skin
 import wojtoteka.nightdrive.domain.Skins
+import wojtoteka.nightdrive.domain.Trail
+import wojtoteka.nightdrive.domain.TrailStyle
+import wojtoteka.nightdrive.domain.Trails
 import wojtoteka.nightdrive.domain.WorldTheme
 import wojtoteka.nightdrive.domain.WorldThemes
 import wojtoteka.nightdrive.engine.Coin
@@ -12,6 +17,7 @@ import wojtoteka.nightdrive.engine.GameEngine
 import wojtoteka.nightdrive.engine.GamePhase
 import wojtoteka.nightdrive.engine.PowerUp
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -47,9 +53,14 @@ class WorldRenderer {
             // ahead disappears while your own car and the warnings stay readable.
             val fog = engine.fogAmount
             if (fog > 0f) drawFog(rc, fog)
+            if (engine.ghostVisible) drawCar(rc, engine.ghostX, engine.ghostY, 0f, GHOST_COLOR, GHOST_COLOR, alpha = GHOST_ALPHA)
+            drawTrail(rc, engine, animMs)
+            if (engine.nitroActive) drawNitro(rc, engine, animMs)
             drawPlayer(rc, engine, animMs)
             drawParticles(rc, engine)
             drawSpeederWarnings(rc, engine, animMs)
+        } else {
+            trailCount = 0
         }
         rc.reset()
     }
@@ -62,6 +73,10 @@ class WorldRenderer {
     private var cachedTheme: WorldTheme = WorldThemes.all.first()
     private var cachedSkinId: String? = null
     private var cachedSkin: Skin = Skins.all.first()
+    private var cachedBodyId: String? = null
+    private var cachedBody: CarBody = CarBodies.all.first()
+    private var cachedTrailId: String? = null
+    private var cachedTrail: Trail = Trails.all.first()
 
     private fun themeFor(id: String): WorldTheme {
         if (id != cachedThemeId) { cachedTheme = WorldThemes.byId(id); cachedThemeId = id }
@@ -123,6 +138,16 @@ class WorldRenderer {
         return cachedSkin
     }
 
+    private fun bodyFor(id: String): CarBody {
+        if (id != cachedBodyId) { cachedBody = CarBodies.byId(id); cachedBodyId = id }
+        return cachedBody
+    }
+
+    private fun trailFor(id: String): Trail {
+        if (id != cachedTrailId) { cachedTrail = Trails.byId(id); cachedTrailId = id }
+        return cachedTrail
+    }
+
     private fun depthY(obj: Any): Float = when (obj) {
         is Enemy -> obj.y
         is Coin -> obj.y
@@ -163,7 +188,7 @@ class WorldRenderer {
         // Road surface
         rc.fillVerticalGradient(0f, -35f, w, 112f, theme.roadTop, theme.roadBottom)
         // Grid
-        drawGrid(rc, animMs, theme)
+        drawGrid(rc, engine, animMs, theme)
         // Neon horizon + near edges
         rc.lineWidth = 1.1f
         rc.alpha = 0.9f
@@ -227,10 +252,17 @@ class WorldRenderer {
         }
     }
 
-    private fun drawGrid(rc: RetroCanvas, animMs: Float, theme: WorldTheme) {
+    // Accumulated rather than derived from the clock, so a nitro burn can speed the road up.
+    private var gridOffset = 0f
+    private var gridLastMs = 0f
+
+    private fun drawGrid(rc: RetroCanvas, engine: GameEngine, animMs: Float, theme: WorldTheme) {
         rc.alpha = 0.32f
         rc.lineWidth = 0.5f
-        val off = (animMs * 0.02f) % 20f
+        val speed = if (engine.nitroActive) GRID_NITRO_SPEED else 1f
+        gridOffset = (gridOffset + (animMs - gridLastMs).coerceAtLeast(0f) * 0.02f * speed) % 20f
+        gridLastMs = animMs
+        val off = gridOffset
         // Longitudinal converging rails (scroll left, seamless every 20u near-spacing)
         var i = -34
         while (i <= 34) {
@@ -253,27 +285,32 @@ class WorldRenderer {
     private fun drawPlayer(rc: RetroCanvas, engine: GameEngine, animMs: Float) {
         if (engine.phase == GamePhase.GAME_OVER) return
         val skin = skinFor(engine.profile.selectedSkin)
-        drawCar(rc, engine.player.x, engine.player.y, engine.player.bounce, skin.bodyColor, skin.accentColor)
+        val body = bodyFor(engine.profile.selectedBody)
+        drawCar(rc, engine.player.x, engine.player.y, engine.player.bounce, skin.bodyColor, skin.accentColor, body = body)
     }
 
     private fun drawEnemy(rc: RetroCanvas, e: Enemy, animMs: Float) {
-        val col = RetroCanvas.hsl100(e.hue)
+        if (e.kind == EnemyKind.BARRIER) { drawBarrier(rc, e, animMs); return }
+        val col = if (e.kind == EnemyKind.POLICE) POLICE_BODY else RetroCanvas.hsl100(e.hue)
         val bounce = 0.3f * sin(e.x / 30f)
         if (e.kind == EnemyKind.SPEEDER) drawSpeedStreaks(rc, e, bounce, col)
         drawCar(rc, e.x, e.y, bounce, col, col, e.length)
+        if (e.kind == EnemyKind.POLICE) drawPoliceLights(rc, e, bounce, animMs)
         if (e.changingLane && (animMs / BLINK_MS).toInt() % 2 == 0) drawBlinker(rc, e, bounce)
     }
 
     /**
      * Faithful port of the original wireframe car (near face + far face + connecting edges).
      * [length] stretches the body for trucks; at 1 the geometry is exactly the original car.
+     * [body] swaps the box for a silhouette, without touching where the car is or how big.
      */
     private fun drawCar(
         rc: RetroCanvas, baseX: Float, baseY: Float, bounce: Float,
-        nearColor: Long, farColor: Long, length: Float = 1f,
+        nearColor: Long, farColor: Long, length: Float = 1f, alpha: Float = 1f, body: CarBody? = null,
     ) {
         rc.reset()
         rc.lineWidth = 1f
+        rc.alpha = alpha
         val y = baseY + bounce
         val size1 = 10f - y / 9f
         val size2 = size1 / 1.1f
@@ -291,6 +328,19 @@ class WorldRenderer {
         // near wheels
         rc.drawRound(x - wheel1, y + 3f * size1 / 2f - 6f * size1 / 2f + bounce, 1.5f * size1, 1.5f * size1, nearColor)
         rc.drawRound(x + wheel1, y + 3f * size1 / 2f - 6f * size1 / 2f + bounce, 1.5f * size1, 1.5f * size1, nearColor)
+        val outline = body?.outline
+        if (outline != null) {
+            drawOutline(rc, outline, x2, y2, half2, 1.5f * size2, farColor)
+            drawOutline(rc, outline, x, y, half1, 1.5f * size1, nearColor)
+            var i = 0
+            while (i < outline.size) {
+                val u = outline[i]
+                val v = outline[i + 1]
+                rc.drawLine(x + u * half1, y + v * 1.5f * size1, x2 + u * half2, y2 + v * 1.5f * size2, farColor)
+                i += 2
+            }
+            return
+        }
         // bodies
         rc.drawRect(x, y, 2f * half1, 3f * size1, nearColor)
         rc.drawRect(x2, y2, 2f * half2, 3f * size2, farColor)
@@ -306,6 +356,117 @@ class WorldRenderer {
             rc.drawLine(cab1, y - 3f * size1 / 2f, cab1, y + 3f * size1 / 2f, nearColor)
             rc.drawLine(cab2, y2 - 3f * size2 / 2f, cab2, y2 + 3f * size2 / 2f, farColor)
         }
+    }
+
+    private fun drawOutline(rc: RetroCanvas, outline: FloatArray, x: Float, y: Float, halfW: Float, halfH: Float, color: Long) {
+        val pts = FloatArray(outline.size)
+        var i = 0
+        while (i < outline.size) {
+            pts[i] = x + outline[i] * halfW
+            pts[i + 1] = y + outline[i + 1] * halfH
+            i += 2
+        }
+        rc.drawPolyline(true, *pts, color = color)
+    }
+
+    /** Striped road barrier on two legs, with a lamp flashing on each end. */
+    private fun drawBarrier(rc: RetroCanvas, e: Enemy, animMs: Float) {
+        rc.reset()
+        val size = 10f - e.y / 9f
+        val half = 2.5f * size
+        val h = 1.1f * size
+        val top = e.y + h / 2f
+        val bottom = e.y - h / 2f
+        rc.lineWidth = 1f
+        rc.drawRect(e.x, e.y, 2f * half, h, BARRIER_COLOR)
+        rc.drawLine(e.x - 0.75f * half, bottom, e.x - 0.75f * half, bottom - size, BARRIER_COLOR)
+        rc.drawLine(e.x + 0.75f * half, bottom, e.x + 0.75f * half, bottom - size, BARRIER_COLOR)
+        rc.lineWidth = 0.7f
+        for (k in -2..2) {
+            val sx = e.x + k * half * 0.4f
+            rc.drawLine(sx - h / 2f, bottom, sx + h / 2f, top, BARRIER_COLOR)
+        }
+        if ((animMs / BLINK_MS).toInt() % 2 == 0) {
+            rc.additive = true
+            rc.fillRound(e.x - half, top + 0.3f * size, 0.7f * size, 0.7f * size, BLINKER_COLOR)
+            rc.fillRound(e.x + half, top + 0.3f * size, 0.7f * size, 0.7f * size, BLINKER_COLOR)
+        }
+        rc.reset()
+    }
+
+    /** Red and blue beacons swapping sides on the roof of a police car. */
+    private fun drawPoliceLights(rc: RetroCanvas, e: Enemy, bounce: Float, animMs: Float) {
+        val y = e.y + bounce
+        val size = 10f - y / 9f
+        val roof = y + 1.5f * size + 0.4f * size
+        val swap = (animMs / POLICE_BLINK_MS).toInt() % 2 == 0
+        rc.additive = true
+        rc.alpha = 0.9f
+        rc.fillRound(e.x - 0.8f * size, roof, 2f * size, 1.2f * size, if (swap) POLICE_RED else POLICE_BLUE)
+        rc.fillRound(e.x + 0.8f * size, roof, 2f * size, 1.2f * size, if (swap) POLICE_BLUE else POLICE_RED)
+        rc.reset()
+    }
+
+    // Recent positions of the player's car, newest first; the world carries them away to the left.
+    private val trailX = FloatArray(TRAIL_POINTS)
+    private val trailY = FloatArray(TRAIL_POINTS)
+    private var trailCount = 0
+    private var trailLastMs = 0f
+
+    private fun drawTrail(rc: RetroCanvas, engine: GameEngine, animMs: Float) {
+        val style = trailFor(engine.profile.selectedTrail).style
+        if (style == TrailStyle.NONE || engine.phase == GamePhase.GAME_OVER) { trailCount = 0; return }
+        if (animMs - trailLastMs >= TRAIL_STEP_MS) {
+            trailLastMs = animMs
+            System.arraycopy(trailX, 0, trailX, 1, TRAIL_POINTS - 1)
+            System.arraycopy(trailY, 0, trailY, 1, TRAIL_POINTS - 1)
+            trailX[0] = engine.player.x
+            trailY[0] = engine.player.y
+            trailCount = min(trailCount + 1, TRAIL_POINTS)
+        }
+        val color = skinFor(engine.profile.selectedSkin).bodyColor
+        rc.reset()
+        rc.additive = true
+        rc.lineWidth = if (style == TrailStyle.RIBBON) 1.8f else 1.2f
+        for (k in 0 until trailCount - 1) {
+            rc.alpha = (1f - k / trailCount.toFloat()) * 0.75f
+            val c = if (style == TrailStyle.RAINBOW) RetroCanvas.hsl100((animMs / 6f).toInt() + k * 14) else color
+            drawTrailSegment(rc, k, -1.2f, c)
+            if (style == TrailStyle.TWIN) drawTrailSegment(rc, k, 0.6f, c)
+        }
+        rc.reset()
+    }
+
+    private fun drawTrailSegment(rc: RetroCanvas, k: Int, side: Float, color: Long) {
+        val s0 = 10f - trailY[k] / 9f
+        val s1 = 10f - trailY[k + 1] / 9f
+        rc.drawLine(
+            trailX[k] - 2.5f * s0 - k * TRAIL_SHIFT, trailY[k] + side * s0,
+            trailX[k + 1] - 2.5f * s1 - (k + 1) * TRAIL_SHIFT, trailY[k + 1] + side * s1,
+            color,
+        )
+    }
+
+    /** Streaks flying past and flames behind the car, for as long as a burn lasts. */
+    private fun drawNitro(rc: RetroCanvas, engine: GameEngine, animMs: Float) {
+        val hw = rc.halfWidthUnits
+        val span = 2f * hw + 200f
+        rc.reset()
+        rc.additive = true
+        rc.lineWidth = 0.8f
+        rc.alpha = 0.4f
+        for (k in 0 until 10) {
+            val x = hw + 100f - (animMs * 0.9f + k * 173f) % span
+            val y = -82f + k * 9.5f
+            rc.drawLine(x, y, x + 40f + k * 37f % 50f, y, NITRO_FLAME)
+        }
+        val p = engine.player
+        val size = 10f - p.y / 9f
+        val rear = p.x - 2.5f * size
+        val flicker = 0.75f + 0.25f * sin(animMs / 30f)
+        rc.alpha = 0.85f
+        rc.fillRound(rear - 2f * size * flicker, p.y - 0.4f * size, 4.4f * size * flicker, 1.4f * size, NITRO_FLAME)
+        rc.reset()
     }
 
     /** Amber indicator on the front corner facing the lane the car is about to move into. */
@@ -345,6 +506,7 @@ class WorldRenderer {
         val edge = rc.halfWidthUnits
         for (i in engine.enemies.indices) {
             val e = engine.enemies[i]
+            if (e.kind == EnemyKind.POLICE) { drawPoliceWarning(rc, e, edge); continue }
             if (e.kind != EnemyKind.SPEEDER) continue
             val size = 10f - e.y / 9f
             if (e.x - 2.5f * size < edge) continue
@@ -355,6 +517,19 @@ class WorldRenderer {
             rc.drawPolyline(false, tip + s, e.y + s, tip, e.y, tip + s, e.y - s, color = WARNING_COLOR)
             rc.drawPolyline(false, tip + 2.2f * s, e.y + s, tip + 1.2f * s, e.y, tip + 2.2f * s, e.y - s, color = WARNING_COLOR)
         }
+        rc.reset()
+    }
+
+    /** The speeder's chevrons, mirrored to the left edge: this one comes from behind. */
+    private fun drawPoliceWarning(rc: RetroCanvas, e: Enemy, edge: Float) {
+        val size = 10f - e.y / 9f
+        if (e.x + 2.5f * size > -edge) return
+        val s = 0.55f * size
+        val tip = -edge + 4f + 2.2f * s
+        rc.reset()
+        rc.lineWidth = 1.4f
+        rc.drawPolyline(false, tip - s, e.y + s, tip, e.y, tip - s, e.y - s, color = POLICE_BLUE)
+        rc.drawPolyline(false, tip - 2.2f * s, e.y + s, tip - 1.2f * s, e.y, tip - 2.2f * s, e.y - s, color = POLICE_BLUE)
         rc.reset()
     }
 
@@ -443,5 +618,17 @@ class WorldRenderer {
         const val BLINKER_COLOR = 0xFFFFB020
         const val WARNING_COLOR = 0xFFFF3D3D
         const val FOG_COLOR = 0xFF2B2A3D
+        const val GRID_NITRO_SPEED = 2.6f
+        const val GHOST_COLOR = 0xFFBFD4FF
+        const val GHOST_ALPHA = 0.35f
+        const val BARRIER_COLOR = 0xFFFFB020
+        const val POLICE_BODY = 0xFFE8EEFF
+        const val POLICE_RED = 0xFFFF3D3D
+        const val POLICE_BLUE = 0xFF4F8CFF
+        const val POLICE_BLINK_MS = 120f
+        const val NITRO_FLAME = 0xFFFFB020
+        const val TRAIL_POINTS = 22
+        const val TRAIL_STEP_MS = 16f
+        const val TRAIL_SHIFT = 2.4f
     }
 }

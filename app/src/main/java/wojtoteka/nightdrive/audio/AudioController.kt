@@ -10,12 +10,20 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-/** The four in-game sound effects, mapped to their bundled asset files. */
+/** The in-game sound effects, mapped to their bundled asset files. */
 enum class Sfx(val asset: String, val defaultVolume: Float) {
     COIN("sfx/coins.wav", 1.0f),
     POINT("sfx/point.wav", 0.8f),
     EXPLOSION("sfx/explosion.wav", 0.55f),
     DEFEAT("sfx/defeat.wav", 0.9f),
+    NEAR_MISS("sfx/nearmiss.wav", 0.7f),
+    POWERUP("sfx/powerup.wav", 0.8f),
+    SHIELD("sfx/shield.wav", 0.8f),
+    WAVE("sfx/wave.wav", 0.75f),
+    STAGE("sfx/stage.wav", 0.7f),
+    NITRO("sfx/nitro.wav", 0.9f),
+    SMASH("sfx/smash.wav", 0.8f),
+    SIREN("sfx/siren.wav", 0.6f),
 }
 
 /**
@@ -33,6 +41,7 @@ class AudioController(private val context: Context) {
 
     private var music: MediaPlayer? = null
     private var musicPrepared = false
+    private var trackAsset = TRACKS[0]
 
     private var musicVolume = MUSIC_VOLUME
     private var targetVolume = MUSIC_VOLUME
@@ -86,7 +95,7 @@ class AudioController(private val context: Context) {
         if (music != null) { resumeMusic(); return }
         try {
             val mp = MediaPlayer()
-            context.assets.openFd("music/music.mp3").use { fd ->
+            context.assets.openFd(trackAsset).use { fd ->
                 mp.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
             }
             mp.isLooping = true
@@ -106,12 +115,28 @@ class AudioController(private val context: Context) {
         }
     }
 
+    /** Switches to track [index]; if music was already loaded the new track starts right away. */
+    fun selectTrack(index: Int) {
+        val asset = TRACKS[index.coerceIn(0, TRACKS.lastIndex)]
+        if (asset == trackAsset) return
+        trackAsset = asset
+        val loaded = music != null
+        try { music?.release() } catch (_: Exception) {}
+        music = null
+        musicPrepared = false
+        musicSpeed = 1f
+        if (loaded && musicEnabled) startMusic()
+    }
+
     fun pauseMusic() {
         try { music?.takeIf { it.isPlaying }?.pause() } catch (_: IllegalStateException) {}
     }
 
     fun resumeMusic() {
-        if (!musicEnabled || !musicPrepared) return
+        if (!musicEnabled) return
+        // Music switched on after a launch with it off: nothing has been loaded yet.
+        if (music == null) { startMusic(); return }
+        if (!musicPrepared) return
         try { music?.takeIf { !it.isPlaying }?.start() } catch (_: IllegalStateException) {}
     }
 
@@ -161,6 +186,7 @@ class AudioController(private val context: Context) {
 
     companion object {
         private const val TAG = "NightDriveAudio"
+        private val TRACKS = listOf("music/music.mp3", "music/neon.ogg")
         private const val MUSIC_VOLUME = 0.6f
         private const val VOLUME_PER_MS = 0.0012f   // full swing in under a second
         private const val SPEED_STEP = 0.03f
