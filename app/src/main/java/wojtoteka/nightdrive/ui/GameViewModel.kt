@@ -310,6 +310,7 @@ class GameViewModel(app: Application) : AndroidViewModel(app) {
             powerups = pus,
             mission = hudMission(),
             highScore = profile.highScore,
+            newRecord = engine.newRecord,
         )
     }
 

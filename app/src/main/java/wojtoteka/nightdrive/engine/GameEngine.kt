@@ -27,7 +27,7 @@ class GameEngine(
 ) {
     // Gameplay randomness, one stream per spawner and reseeded every run (see [seedRun]). Separate
     // streams keep each sequence fixed no matter how the spawners interleave, so a daily route
-    // plays out the same for everyone even though spawn timing reacts to the score.
+    // plays out the same for everyone.
     private var trafficRng = Rng()
     private var coinRng = Rng()
     private var powerupRng = Rng()
@@ -152,6 +152,15 @@ class GameEngine(
 
     val survivalSeconds: Int get() = ((clockMs - streakStartMs) / 1000L).toInt().coerceAtLeast(0)
     val comboMultiplier: Float get() = C.comboMultiplier(streak)
+
+    /** This run went past the record it started against; matching it is not enough. */
+    val newRecord: Boolean get() = mode == RunMode.STANDARD && score > highScoreAtStart
+
+    /**
+     * What the traffic ramp follows: the score on a normal run, the clock on the daily route, so
+     * two players on the same route get the same traffic however they are scoring.
+     */
+    private val trafficPace: Int get() = if (mode == RunMode.DAILY) survivalSeconds else score
 
     /** Points of the latest near-miss while its HUD tag is still showing, otherwise 0. */
     val nearMissFlash: Int
@@ -287,9 +296,10 @@ class GameEngine(
         updatePowerups()
         maybeSpawnPowerup()
 
-        difficulty = (score / 20)
+        difficulty = trafficPace / 20
 
-        if (score > profile.highScore) {
+        // The daily route has its own record and its own board.
+        if (mode == RunMode.STANDARD && score > profile.highScore) {
             profile.highScore = score
             // A first-ever run has no record to beat, so nothing to celebrate at its first point.
             if (!newHighAnnounced && highScoreAtStart > 0) { events += GameEvent.NewHighScore; newHighAnnounced = true }
@@ -412,7 +422,7 @@ class GameEngine(
 
     private fun maybeSpawnEnemy() {
         if (clockMs - enemyTimer < enemySpawnDelay || enemies.size >= C.MAX_ENEMIES) return
-        var speedMult = 1f + (score / 30) * 0.1f
+        var speedMult = 1f + (trafficPace / 30) * 0.1f
         speedMult = min(speedMult, C.SPEED_MULT_MAX)
         val hue = trafficRng.intInRange(0, 359)
         val y = trafficRng.intInRange(25f, -50f).toFloat()
@@ -488,7 +498,7 @@ class GameEngine(
     private fun spawnConvoy() {
         val gap = waveRng.intInRange(0, C.CONVOY_LANES.size - 1)
         val hue = waveRng.intInRange(0, 359)
-        val speed = min(1f + (score / 30) * 0.1f, C.SPEED_MULT_MAX)
+        val speed = min(1f + (trafficPace / 30) * 0.1f, C.SPEED_MULT_MAX)
         for (k in C.CONVOY_LANES.indices) {
             if (k == gap) continue
             enemies += Enemy(C.CONVOY_SPAWN_X, C.CONVOY_LANES[k], speed, hue)

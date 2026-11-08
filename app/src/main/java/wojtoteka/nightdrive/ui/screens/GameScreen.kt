@@ -178,7 +178,7 @@ private fun HudLeft(vm: GameViewModel, modifier: Modifier) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(hud.score.toString(), style = NDType.Score.copy(shadow = hudShadow), color = NDColors.Text)
-            if (hud.score > 0 && hud.score >= hud.highScore) {
+            if (hud.newRecord) {
                 Spacer(Modifier.width(10.dp))
                 Tag(s["new_record"].trimEnd('!'), filled = true)
             }
@@ -309,7 +309,7 @@ private fun PauseOverlay(vm: GameViewModel) {
 private fun GameOverOverlay(vm: GameViewModel) {
     val s = LocalStrings.current
     val hud = vm.hud
-    val isRecord = hud.score > 0 && hud.score >= hud.highScore
+    val isRecord = hud.newRecord
     val p = vm.profileState
     Box(
         Modifier
@@ -388,7 +388,7 @@ private fun RunStats(vm: GameViewModel) {
             Readout(s["run_time"], formatTime(hud.runSeconds), Modifier.weight(1f), small = true)
             VRule(30.dp)
             Spacer(Modifier.width(14.dp))
-            Readout(s["best_streak"], hud.bestStreak.toString(), Modifier.weight(1f), small = true)
+            Readout(s["combo"], hud.bestStreak.toString(), Modifier.weight(1f), small = true)
             VRule(30.dp)
             Spacer(Modifier.width(14.dp))
             Readout(s["mission_nearmiss_s"], hud.nearMisses.toString(), Modifier.weight(1f), small = true)

@@ -313,6 +313,47 @@ class GameEngineTest {
     }
 
     @Test
+    fun matchingTheRecordIsNotANewRecord() {
+        val engine = startedEngine(PlayerProfile().apply { highScore = 1 })
+        engine.coins.clear()
+        collectCoins(engine, 1)
+        assertEquals(1, engine.score)
+        assertTrue(!engine.newRecord)
+        collectCoins(engine, 2)
+        assertTrue(engine.newRecord)
+    }
+
+    @Test
+    fun dailyRouteScoreStaysOffTheAllTimeRecord() {
+        val profile = PlayerProfile().apply { highScore = 1 }
+        val engine = startedEngine(profile, RunMode.DAILY)
+        engine.coins.clear()
+        val events = collectCoins(engine, 3)
+        assertEquals(1, profile.highScore)
+        assertTrue(GameEvent.NewHighScore !in events)
+        assertTrue(!engine.newRecord)
+    }
+
+    @Test
+    fun dailyRouteTrafficDoesNotDependOnTheScore() {
+        val day = 20_000L * GameConfig.DAY_MS
+        val scoring = startedEngine(PlayerProfile(), RunMode.DAILY, Rng(1L), day)
+        val idle = startedEngine(PlayerProfile(), RunMode.DAILY, Rng(2L), day)
+        repeat(1_200) { tick ->
+            if (scoring.phase == GamePhase.PLAYING && tick % 3 == 0) {
+                scoring.coins += Coin(scoring.player.x, scoring.player.y - 10f, 0f)
+            }
+            if (scoring.phase == GamePhase.PLAYING) scoring.update(0L)
+            if (idle.phase == GamePhase.PLAYING) idle.update(0L)
+        }
+        assertTrue("the run should have scored", scoring.score > idle.score + 40)
+        assertEquals(
+            idle.enemies.map { listOf(it.x, it.y, it.hue, it.kind) },
+            scoring.enemies.map { listOf(it.x, it.y, it.hue, it.kind) },
+        )
+    }
+
+    @Test
     fun comboMultiplierTiersMatchConfig() {
         assertEquals(1f, GameConfig.comboMultiplier(0), 0f)
         assertEquals(1.5f, GameConfig.comboMultiplier(GameConfig.COMBO_T1), 0f)

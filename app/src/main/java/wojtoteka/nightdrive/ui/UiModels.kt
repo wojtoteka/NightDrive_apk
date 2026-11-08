@@ -106,4 +106,5 @@ data class HudState(
     /** The unfinished daily mission closest to done (with some progress), shown under the score. */
     val mission: MissionSnapshot? = null,
     val highScore: Int = 0,
+    val newRecord: Boolean = false,
 )
