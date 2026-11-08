@@ -27,22 +27,27 @@ a trasa dnia jest identyczna u wszystkich graczy.
 
 **Rozgrywka.** Mijanie aut o włos (near-miss) daje punkty i podtrzymuje combo. Ruch z czasem
 gęstnieje i się różnicuje: ciężarówki, auta zmieniające pas z kierunkowskazem i piraci drogowi
-zapowiadani strzałkami przy krawędzi ekranu. Po dwóch minutach przychodzą fale - konwój z jedną
-luką albo mgła. Co minutę zaczyna się nowy etap, a kupione motywy świata zmieniają się po kolei
+zapowiadani strzałkami przy krawędzi ekranu. Mijanki ładują nitro: na chwilę przyspiesza świat
+i pozwala taranować ruch. Od 45. sekundy trafiają się wydarzenia - pościg policji od tyłu, roboty
+drogowe i złota fala monet, a po dwóch minutach także konwój z jedną luką albo mgła. Monety
+układają się w linie, łuki i zygzaki. Co minutę zaczyna się nowy etap, a kupione motywy świata zmieniają się po kolei
 z płynnym przejściem. Muzyka reaguje na jazdę: narasta z combo, zwalnia w slow-mo, cichnie
 po kraksie.
 
 **Codzienne granie.** Trzy misje dnia (łatwa, średnia, trudna) z nagrodami i bonusem za komplet
 oraz trasa dnia - ta sama dla wszystkich, bez tarczy z garażu i boostów, z własnym rankingiem
-online.
-Ekran końca gry podsumowuje bieg i podpowiada, ile zabrakło do rekordu i które osiągnięcie
-jest najbliżej.
+online i duchem najlepszego dzisiejszego przejazdu. Passa dni płaci monetami, a pierwsze biegi
+prowadzą krótkie podpowiedzi.
+Ekran końca gry podsumowuje bieg, mówi, co Cię rozbiło, i podpowiada, ile zabrakło do rekordu
+i które osiągnięcie jest najbliżej.
 
-**Sklep i progresja.** Skiny aut kupowane za monety, power-upy (magnes, slow-mo, podwojenie,
+**Sklep i progresja.** Kolory, karoserie i neonowe ślady aut kupowane za monety (karoseria nie
+zmienia hitboxa, więc ranking zostaje uczciwy), power-upy (magnes, slow-mo, podwojenie,
 deszcz monet) z trójstopniowymi ulepszeniami czasu trwania - osobno albo pakietem.
-Do tego 24 osiągnięcia z nagrodami w monetach.
+Do tego 26 osiągnięć z nagrodami w monetach.
 
-**Ranking online.** Top 10 wszech czasów i Top 10 trasy dnia na własnym API. Zgłoszenie jest
+**Ranking online.** Top 10 wszech czasów, Top 10 trasy dnia i liga tygodniowa na własnym API,
+a gracz spoza dziesiątki widzi swoje miejsce. Zgłoszenie jest
 podpisane HMAC-SHA256 razem z wersją gry, skrótem certyfikatu, którym podpisano APK, i losowym id
 instalacji (do niego przypisany jest nick, więc nikt nie nadpisze cudzego wpisu). Dochodzi do tego
 token Google Play Integrity, którego zmodowana wersja gry nie podrobi - serwer może dzięki temu
@@ -52,7 +57,8 @@ z `local.properties`. Bez internetu gra działa w całości offline.
 **Bez reklam.** Żadnego SDK reklamowego, żadnych zgód UMP - gra nie wysyła nic poza wynikami
 do rankingu.
 
-**Reszta.** Dwa języki (PL/EN, domyślnie za systemem), haptyka przy monetach i kraksach,
+**Reszta.** Dwa języki (PL/EN, domyślnie za systemem), dwa utwory do wyboru, układ dla
+leworęcznych, haptyka przy monetach i kraksach,
 DataStore na profil gracza, baseline profile żeby ART skompilował ścieżkę startu z wyprzedzeniem
 zamiast JIT-ować ją przy każdym zimnym starcie.
 
